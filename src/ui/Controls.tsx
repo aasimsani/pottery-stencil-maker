@@ -1,0 +1,155 @@
+import type { Settings } from '../state';
+import { usePersistent } from '../state';
+import { BED_MARGIN } from '../pipeline';
+import { diameterAt, surfaceLength, type Piece } from '../core/piece';
+import { CheckField, NumberField, Section, SelectField } from './fields';
+
+type Set = <K extends keyof Settings>(key: K, value: Settings[K]) => void;
+
+// Presets come with a sensible paint band, in mm along the surface from the base.
+const PRESETS: { piece: Piece; band: [number, number] }[] = [
+  { piece: { name: 'Straight mug', profile: [{ z: 0, d: 80 }, { z: 95, d: 80 }] }, band: [15, 80] },
+  { piece: { name: 'Flared mug', profile: [{ z: 0, d: 78 }, { z: 95, d: 86 }] }, band: [20, 70] },
+  { piece: { name: 'Vase shoulder (narrows up)', profile: [{ z: 0, d: 120 }, { z: 50, d: 90 }] }, band: [5, 45] },
+  { piece: { name: 'Bowl, outside wall', profile: [{ z: 0, d: 90 }, { z: 60, d: 160 }] }, band: [10, 60] },
+  { piece: { name: 'Plate rim (flat ring)', profile: [{ z: 0, d: 180 }, { z: 8, d: 260 }] }, band: [0, 40.8] },
+];
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+function PieceEditor({ s, set, onPhoto }: { s: Settings; set: Set; onPhoto: () => void }) {
+  const [saved, setSaved] = usePersistent<Piece[]>('pieces', []);
+  const piece = s.piece, p = piece.profile, S = surfaceLength(piece);
+  const rim = p[p.length - 1];
+  const same = (a: Piece) => a.name === piece.name && JSON.stringify(a.profile) === JSON.stringify(p);
+  const current = PRESETS.find((x) => same(x.piece)) ? `preset:${piece.name}` : saved.find(same) ? `saved:${piece.name}` : '';
+
+  const setProfile = (profile: Piece['profile']) => set('piece', { ...piece, profile: [...profile].sort((a, b) => a.z - b.z) });
+  const choose = (key: string) => {
+    const kind = key.slice(0, key.indexOf(':')), name = key.slice(key.indexOf(':') + 1);
+    const preset = kind === 'preset' ? PRESETS.find((x) => x.piece.name === name) : undefined;
+    const next = preset?.piece ?? (kind === 'saved' ? saved.find((x) => x.name === name) : undefined);
+    if (!next) return;
+    set('piece', next);
+    const len = surfaceLength(next);
+    // A saved piece keeps the band where it was, trimmed to fit the piece.
+    const [from, to] = preset ? preset.band : [Math.min(s.bandFrom, len - 1), Math.min(s.bandTo, len)];
+    set('bandFrom', from); set('bandTo', to);
+  };
+  const middle = p.slice(1, -1);
+
+  return (
+    <Section title="Piece">
+      <SelectField label="Piece" value={current} onChange={choose} options={[
+        ['', current ? '—' : `${piece.name} (edited)`],
+        ...PRESETS.map((x): [string, string] => [`preset:${x.piece.name}`, x.piece.name]),
+        ...saved.map((x): [string, string] => [`saved:${x.name}`, `★ ${x.name}`]),
+      ]} />
+      <label>Name <input type="text" value={piece.name} onChange={(e) => set('piece', { ...piece, name: e.target.value })} /></label>
+      <div className="row-actions">
+        <button className="secondary small" onClick={() => setSaved((ps) => [...ps.filter((x) => x.name !== piece.name), piece])}>Save to my pieces</button>
+        {saved.some((x) => x.name === piece.name) && (
+          <button className="secondary small" onClick={() => setSaved((ps) => ps.filter((x) => x.name !== piece.name))}>Delete</button>
+        )}
+        <button className="secondary small" onClick={onPhoto}>From a photo (experimental)</button>
+      </div>
+
+      <NumberField label="Base Ø" unit="mm" value={p[0].d} min={1} step={0.5} onChange={(v) => setProfile([{ ...p[0], d: v }, ...p.slice(1)])} />
+      <NumberField label="Rim Ø" unit="mm" value={rim.d} min={1} step={0.5} onChange={(v) => setProfile([...p.slice(0, -1), { ...rim, d: v }])} />
+      <NumberField label="Height" unit="mm" value={rim.z} min={1} step={0.5}
+        onChange={(v) => setProfile([...p.slice(0, -1).filter((q, i) => i === 0 || q.z < v), { ...rim, z: v }])} />
+      {middle.map((q, i) => (
+        <div className="mid-point" key={i}>
+          <NumberField label="At height" unit="mm" value={q.z} min={0.5} step={0.5} onChange={(v) => setProfile(p.map((x) => (x === q ? { ...x, z: Math.min(v, rim.z - 0.5) } : x)))} />
+          <NumberField label="Ø" unit="mm" value={q.d} min={1} step={0.5} onChange={(v) => setProfile(p.map((x) => (x === q ? { ...x, d: v } : x)))} />
+          <button className="icon" aria-label="Remove this measurement" onClick={() => setProfile(p.filter((x) => x !== q))}>×</button>
+        </div>
+      ))}
+      <div className="row-actions">
+        <button className="secondary small" onClick={() => {
+          // The new measurement starts halfway up, at the diameter the straight line would give there.
+          setProfile([...p, { z: round1(rim.z / 2), d: round1(diameterAt(piece, S / 2)) }]);
+        }}>+ Measurement in between</button>
+      </div>
+      <p className="hint">
+        Measure the outside at the stage you'll paint. A tape round the piece gives circumference, and circumference ÷ 3.14 = Ø.
+        Add measurements in between for bellied or waisted shapes. The surface runs {S.toFixed(1)} mm from base to rim.
+      </p>
+    </Section>
+  );
+}
+
+export function Controls({ s, set, onPhoto }: { s: Settings; set: Set; onPhoto: () => void }) {
+  const S = surfaceLength(s.piece);
+  return (
+    <aside className="panel controls" aria-label="Piece and stencil settings">
+      <PieceEditor s={s} set={set} onPhoto={onPhoto} />
+
+      <Section title="Paint band">
+        <NumberField label="From (up from the base)" unit="mm" value={s.bandFrom} min={0} step={0.5} onChange={(v) => set('bandFrom', v)} />
+        <NumberField label="To" unit="mm" value={s.bandTo} min={1} step={0.5} onChange={(v) => set('bandTo', v)} />
+        <div className="row-actions">
+          <button className="secondary small" onClick={() => { set('bandFrom', 0); set('bandTo', round1(S)); }}>Whole piece</button>
+        </div>
+        <p className="hint">Measured along the surface. Layers fill the band, and their slices are % of it.</p>
+        <NumberField label="Margin above" unit="mm" value={s.above} min={0} max={60} step={0.5} onChange={(v) => set('above', v)} />
+        <NumberField label="Margin below" unit="mm" value={s.toBase ? round1(Math.min(s.bandFrom, S)) : s.below} min={0} max={60} step={0.5} onChange={(v) => set('below', v)} />
+        <NumberField label="Margin at the ends" unit="mm" value={s.ends} min={0} max={30} step={0.5} onChange={(v) => set('ends', v)} />
+        <CheckField label="Reach the base, so the stencil sits on the table and lines itself up" value={s.toBase} onChange={(v) => set('toBase', v)} />
+      </Section>
+
+      <Section title="Stencil">
+        <SelectField label="Covers" value={s.coverage} onChange={(v) => set('coverage', v)} options={[
+          [1, 'all the way round'], [0.5, 'half (use twice)'], [1 / 3, 'a third (use 3×)'], [0.25, 'a quarter (use 4×)'], [1 / 6, 'a sixth (use 6×)'],
+        ]} />
+        <SelectField label="Print as" value={s.printAs} onChange={(v) => set('printAs', v)}
+          options={[['flat', 'flat sheet'], ['shell', 'curved shell']]} />
+        <p className="hint">{s.printAs === 'shell'
+          ? 'Prints standing upright in the band\'s exact shape, so it sits flush without bending. Partial wraps clip on from the side, past the handle. A full wrap leaves a 3 mm slit to spring it open.'
+          : 'Prints flat and bends round the piece. Easiest to print, and best for gentle curves.'}</p>
+        {s.printAs === 'shell'
+          ? <NumberField label="Clearance to the pot" unit="mm" value={s.clearance} min={0} max={2} step={0.05} onChange={(v) => set('clearance', v)} />
+          : <SelectField label="Shape" value={s.shape} onChange={(v) => set('shape', v)} options={[['arc', 'fitted arc'], ['strip', 'straight strip']]} />}
+        <NumberField label="Thickness" unit="mm" value={s.thick} min={0.2} max={2} step={0.1} onChange={(v) => set('thick', v)} />
+      </Section>
+
+      {/* Expert settings live one step away. The defaults suit a Bambu Lab P2S with a 0.4 mm nozzle. */}
+      <details className="expert">
+        <summary>Printer &amp; safety settings</summary>
+        <Section title="Strength">
+          <SelectField label="Loose pieces" value={s.islandMode} onChange={(v) => set('islandMode', v)}
+            options={[['bridge', 'bridge them'], ['drop', 'paint over them'], ['keep', 'keep them loose']]} />
+          <NumberField label="Bridge width" unit="mm" value={s.bridge} min={0.4} max={4} step={0.1} onChange={(v) => set('bridge', v)} />
+          {s.printAs === 'shell' ? (
+            <>
+              <CheckField label="Support posts under wide hole tops" value={s.posts} onChange={(v) => set('posts', v)} />
+              <NumberField label="Longest bridge" unit="mm" value={s.maxBridge} min={2} max={20} step={0.5} onChange={(v) => set('maxBridge', v)} />
+            </>
+          ) : (
+            <CheckField label="Hold wide pieces at both sides, so they don't lift when wrapped" value={s.holdFlaps} onChange={(v) => set('holdFlaps', v)} />
+          )}
+          <SelectField label="Mesh detail" value={s.res} onChange={(v) => set('res', v)}
+            options={[[0.1, 'fine (0.1 mm)'], [0.15, 'normal (0.15 mm)'], [0.25, 'draft (0.25 mm)']]} />
+        </Section>
+
+        <Section title="Print check">
+          <NumberField label="Nozzle" unit="mm" value={s.nozzle} min={0.1} max={1.2} step={0.05}
+            onChange={(v) => { set('nozzle', v); set('minPlastic', Math.round(v * 20) / 10); set('minHole', Math.round(v * 20) / 10); }} />
+          <NumberField label="Thinnest plastic" unit="mm" value={s.minPlastic} min={0.2} max={5} step={0.1} onChange={(v) => set('minPlastic', v)} />
+          <NumberField label="Thinnest paint line" unit="mm" value={s.minHole} min={0.2} max={5} step={0.1} onChange={(v) => set('minHole', v)} />
+          <CheckField label="Hold back the STL while the check finds errors" value={s.strict} onChange={(v) => set('strict', v)} />
+          <p className="hint">Two nozzle widths is the practical minimum for both. Changing the nozzle resets them to that.</p>
+        </Section>
+
+        <Section title="Printer">
+          <NumberField label="Bed width" unit="mm" value={s.bedW} min={50} onChange={(v) => set('bedW', v)} />
+          <NumberField label="Bed depth" unit="mm" value={s.bedD} min={50} onChange={(v) => set('bedD', v)} />
+          <p className="hint">
+            Set for a Bambu Lab P2S (256 × 256 mm). The fit check keeps {BED_MARGIN} mm clear of each bed edge. A stencil
+            that only fits at an angle gets that rotation built into the STL.
+          </p>
+        </Section>
+      </details>
+    </aside>
+  );
+}

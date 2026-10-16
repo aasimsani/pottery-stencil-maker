@@ -34,9 +34,9 @@ export interface StencilResult {
   checks: Check[];
   /** Wide pieces still hanging off one narrow link (1 = flap), and how many bridges were added to hold the rest. */
   flapMask: Uint8Array; flapBridges: number;
-  /** For a curved shell: its outside diameter and height, in mm, as it stands on the bed. */
+  /** The curved shell's outside diameter and height in mm, as it stands on the bed. Flat sheets leave it unset. */
   shellSize?: [number, number];
-  /** For a curved shell: spans still printing in mid-air (1 = sags), and how many support posts were added. */
+  /** In a curved shell, sagMask marks spans that still print in mid-air (1 = sags), and posts counts the support posts the pipeline added. */
   sagMask?: Uint8Array; posts: number;
   /** Where the stencil sits on the piece, and how far a curved wall strays from it. */
   band: Band;

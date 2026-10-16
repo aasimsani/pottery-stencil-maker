@@ -90,8 +90,9 @@ export function geometry(p: BandParams) {
     dr,
     /**
      * Maps a flat raster point (i pixels across, j pixels down, at pixel corners) back to its place
-     * on the pot: s mm up the surface from the band's bottom edge, and theta radians round the axis,
-     * with 0 at the paint area's centre. It inverts the unrolling, so lengths along the surface are kept.
+     * on the pot. The point lands s mm up the surface from the band's bottom edge and theta radians
+     * round the axis, with 0 at the paint area's centre. It inverts the unrolling, so lengths along
+     * the surface are kept.
      */
     wrap(i: number, j: number) {
       const x = xmin + i * res, y = topIsOuter ? ymax - j * res : ymin + j * res;

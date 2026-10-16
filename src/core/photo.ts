@@ -1,4 +1,4 @@
-// Experimental: traces a round piece's profile from a side-on photo against a plain background.
+// This experimental module traces a round piece's profile from a side-on photo against a plain background.
 import { otsuThreshold } from './threshold';
 
 // backgroundColor() is the median colour of the image's border pixels.

@@ -3,7 +3,7 @@ import { bandOnPiece, pieceProfile, surfaceLength, TEX_PAD, type Piece } from '.
 
 const mug: Piece = { name: 'mug', profile: [{ z: 0, d: 78 }, { z: 95, d: 86 }] };
 const plate: Piece = { name: 'plate', profile: [{ z: 0, d: 180 }, { z: 8, d: 260 }] };
-// A bellied vase: widest in the middle.
+// This bellied vase is widest in the middle.
 const vase: Piece = { name: 'vase', profile: [{ z: 0, d: 80 }, { z: 60, d: 120 }, { z: 120, d: 80 }] };
 
 describe('bandOnPiece', () => {

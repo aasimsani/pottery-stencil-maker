@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { autoTolerance, profileFromMask, segment } from './photo';
 
-// photo() paints a synthetic RGBA image: a light background with shapes drawn by fill(x, y).
+// photo() paints a synthetic RGBA image with a light background and the shapes that fill(x, y) draws.
 function photo(w: number, h: number, fill: (x: number, y: number) => [number, number, number] | null) {
   const d = new Uint8ClampedArray(w * h * 4);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {

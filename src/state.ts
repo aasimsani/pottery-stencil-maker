@@ -26,7 +26,7 @@ export interface Settings {
   posts: boolean; maxBridge: number;
   // Printer (Bambu Lab P2S defaults)
   bedW: number; bedD: number;
-  // Print safety: the guardrails checked before download
+  // The print check reads these limits before every download.
   nozzle: number; minPlastic: number; minHole: number; strict: boolean;
   // Preview
   paintColor: string;

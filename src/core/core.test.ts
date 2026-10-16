@@ -88,7 +88,7 @@ describe('connectIslands', () => {
   });
 
   test('with no border, every island is bridged to the largest piece, so the stencil prints in one piece', () => {
-    // A jigsaw-like grid: paint lines 2 px wide every 10 px cut the plastic into 25 separate squares, with no frame at all.
+    // Paint lines 2 px wide every 10 px form a jigsaw-like grid. They cut the plastic into 25 separate squares, and the stencil has no frame.
     const w = 50, h = 50, solid = new Uint8Array(w * h), inside = new Uint8Array(w * h).fill(1), frame = new Uint8Array(w * h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) solid[y * w + x] = x % 10 < 8 && y % 10 < 8 ? 1 : 0;
     const m: Mask = { w, h, res: 0.1, solid, inside, frame };

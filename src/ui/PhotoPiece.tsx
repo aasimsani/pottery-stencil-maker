@@ -6,7 +6,7 @@ import { useDialog } from './dialog';
 
 const MAX_W = 640, MAX_H = 520;
 
-/** Experimental: builds a piece's profile from a side-on photo. */
+/** Builds a piece's profile from a side-on photo. This feature is experimental. */
 export function PhotoPiece({ onUse, onClose }: { onUse: (piece: Piece) => void; onClose: () => void }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   // null means automatic: Otsu's method on colour distance from the background.

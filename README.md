@@ -2,6 +2,8 @@
 
 Design underglaze stencils for your pottery and 3D print them. You measure the band that you want to paint on a mug, pot, vase, bowl, or plate rim. Then you layer designs from open libraries, or your own images, onto the band. The app gives you an STL file that fits the piece.
 
+**Try it in your browser at [aasimsani.net/projects/pottery-stencil-maker](https://aasimsani.net/projects/pottery-stencil-maker/).** You don't need to install anything.
+
 ![The app with a sprig-and-dot design on a flared mug, the flat stencil, a 3D preview, and a passing print check](docs/screenshot.png)
 
 - **The stencil fits the piece.** A tapered pot gets an arc-shaped stencil, because a flat sheet lies flush on a cone only when the sheet has that shape. A plate rim gets a ring.

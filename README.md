@@ -23,6 +23,8 @@ Then open http://localhost:5173. Everything runs in your browser, and your desig
 
 To host it yourself, run `npm run build` and put the `dist/` folder on any static host. It also runs from the folder directly with `npm run preview`.
 
+**Cloudflare Workers.** `wrangler.jsonc` serves the build as a static-assets Worker. Run `npx wrangler login` once, then `npm run deploy` builds the app and publishes it to `pottery-stencil-maker.<your-subdomain>.workers.dev`.
+
 ## Make a stencil
 
 1. **Describe the piece.** Pick a preset, or enter its base Ø, rim Ø and height in mm. A tape round the piece gives the circumference, and circumference ÷ 3.14 is the Ø. For bellied or waisted shapes, add measurements in between. Measure at the stage you'll paint, because clay shrinks. **Save to my pieces** keeps a piece for next time.

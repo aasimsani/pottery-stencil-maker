@@ -6,5 +6,7 @@
   // The script in src/cloudflare.ts maps the /projects/ URL onto those files.
   "main": "src/cloudflare.ts",
   "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true },
-  "routes": [{ "pattern": "aasimsani.net/projects/pottery-stencil-maker*", "zone_name": "aasimsani.net" }]
+  "routes": [{ "pattern": "aasimsani.net/projects/pottery-stencil-maker*", "zone_name": "aasimsani.net" }],
+  // The workers.dev address stays on so that aasimsani.net can fall back to it.
+  "workers_dev": true
 }

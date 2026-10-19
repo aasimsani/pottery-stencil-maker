@@ -16,6 +16,8 @@ export interface Span {
 export interface SagOptions {
   /** Print layer height, the longest bridge the printer spans cleanly, and the furthest a shelf may reach, in mm. */
   layer: number; maxBridge: number; maxReach: number;
+  /** The widest plastic that may start in mid-air, held at neither end, in mm. A slicer flags any such spot as a floating region. */
+  maxFloat: number;
 }
 
 export interface SagResult { spans: Span[]; mask: Uint8Array }
@@ -23,8 +25,10 @@ export interface SagResult { spans: Span[]; mask: Uint8Array }
 // findSags() slices the shell into layers the way the slicer does, from the bed up. Plastic in a layer
 // is supported when the layer below has plastic within one safe overhang step, about 55° from
 // upright (1.4 × the layer height). Unsupported runs are either bridges, held at both ends, or
-// shelves, held at one end. A bridge sags past maxBridge, and a shelf droops past maxReach.
-export function findSags(m: Mask, { layer, maxBridge, maxReach }: SagOptions): SagResult {
+// shelves, held at one end. A bridge sags past maxBridge, and a shelf droops past maxReach. Plastic
+// held at neither end, such as the tip of a point that hangs down into a hole, starts in mid-air,
+// so it may span only maxFloat.
+export function findSags(m: Mask, { layer, maxBridge, maxReach, maxFloat }: SagOptions): SagResult {
   const { w, h, solid, res } = m;
   const layerPx = Math.max(1, Math.round(layer / res)), stepPx = Math.max(1, Math.round((1.4 * layer) / res));
   const spans: Span[] = [], mask = new Uint8Array(w * h), below = new Int32Array(w + 1);
@@ -44,7 +48,7 @@ export function findSags(m: Mask, { layer, maxBridge, maxReach }: SagOptions): S
       const anchored = left && right;
       // The span runs between the supports in the layer below, which reach stepPx in from each held end.
       const length = (x - a + (left ? stepPx : 0) + (right ? stepPx : 0)) * res;
-      if (anchored ? length > maxBridge : length > maxReach) {
+      if (length > (anchored ? maxBridge : left || right ? maxReach : maxFloat)) {
         spans.push({ row: j, a, b: x, length, anchored });
         for (let r = Math.max(0, j - layerPx + 1); r <= j; r++) for (let k = a; k < x; k++) mask[r * w + k] = 1;
       }
@@ -64,8 +68,12 @@ export function addPosts(m: Mask, spans: Span[], { postPx, maxBridge }: { postPx
   const post = (xc: number, row: number) => {
     const x0 = Math.max(0, Math.round(xc) - half), x1 = Math.min(w, Math.round(xc) + half);
     let filled = false;
-    for (let y = row + 1; y < h; y++) {
-      const c = y * w + Math.min(w - 1, Math.max(0, Math.round(xc)));
+    const col = Math.min(w - 1, Math.max(0, Math.round(xc)));
+    // A point that hangs down can reach a row or two below the row that represents its layer, so the post starts under it.
+    let y0 = row + 1;
+    while (y0 < h && solid[y0 * w + col]) y0++;
+    for (let y = y0; y < h; y++) {
+      const c = y * w + col;
       if (solid[c]) break; // reached the floor of the hole
       for (let x = x0; x < x1; x++) if (inside[y * w + x] && !solid[y * w + x]) { solid[y * w + x] = 1; filled = true; }
     }
@@ -77,6 +85,10 @@ export function addPosts(m: Mask, spans: Span[], { postPx, maxBridge }: { postPx
       // Spread the posts across the gap between the supports either side.
       const start = s.a - (s.length / res - (s.b - s.a)) / 2, k = Math.ceil(s.length / maxBridge) - 1;
       for (let i = 1; i <= k; i++) post(start + (lengthPx * i) / (k + 1), s.row);
+    } else if (!(s.a > 0 && solid[s.row * w + s.a - 1]) && !(s.b < w && solid[s.row * w + s.b])) {
+      // Plastic held at neither end gets posts spread evenly under it, starting with one under its middle.
+      const k = Math.ceil(s.length / maxBridge);
+      for (let i = 0; i < k; i++) post(s.a + ((s.b - s.a) * (2 * i + 1)) / (2 * k), s.row);
     } else {
       // A shelf hangs from whichever end is held. Prop its free end, then split what's left.
       const heldLeft = s.a > 0 && solid[s.row * w + s.a - 1] === 1;

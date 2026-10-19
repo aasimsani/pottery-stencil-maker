@@ -56,8 +56,9 @@ const SHELL_SLIT = 3;
 /** The tallest shell the printer builds, in mm (Bambu Lab P2S). */
 const SHELL_MAX_HEIGHT = 250;
 /** Upright shells: 0.2 mm layers, and a shelf may reach 2 mm (about 5 line widths) out unsupported, which
- *  covers the sloping tops of round holes. maxBridge comes from the settings. */
-const SAG = { layer: 0.2, maxBridge: 8, maxReach: 2 };
+ *  covers the sloping tops of round holes. A point that starts in mid-air may be one 0.4 mm line wide,
+ *  which droops too little to matter. maxBridge comes from the settings. */
+const SAG = { layer: 0.2, maxBridge: 8, maxReach: 2, maxFloat: 0.4 };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 

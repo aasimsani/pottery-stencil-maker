@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { Settings } from '../state';
 import { usePersistent } from '../state';
+import { widestD } from '../scale';
 import { BED_MARGIN } from '../pipeline';
 import { diameterAt, surfaceLength, type Piece } from '../core/piece';
 import { CheckField, NumberField, Section, SelectField } from './fields';
@@ -17,8 +19,9 @@ const PRESETS: { piece: Piece; band: [number, number] }[] = [
 
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-function PieceEditor({ s, set, onPhoto }: { s: Settings; set: Set; onPhoto: () => void }) {
+function PieceEditor({ s, set, onPhoto, onScale }: { s: Settings; set: Set; onPhoto: () => void; onScale: (k: number) => void }) {
   const [saved, setSaved] = usePersistent<Piece[]>('pieces', []);
+  const widest = widestD(s.piece), [target, setTarget] = useState<number | null>(null);
   const piece = s.piece, p = piece.profile, S = surfaceLength(piece);
   const rim = p[p.length - 1];
   const same = (a: Piece) => a.name === piece.name && JSON.stringify(a.profile) === JSON.stringify(p);
@@ -71,19 +74,29 @@ function PieceEditor({ s, set, onPhoto }: { s: Settings; set: Set; onPhoto: () =
           setProfile([...p, { z: round1(rim.z / 2), d: round1(diameterAt(piece, S / 2)) }]);
         }}>+ Measurement in between</button>
       </div>
+      <NumberField label="Scale to widest Ø" unit="mm" value={target ?? widest} min={10} step={1} onChange={setTarget} />
+      {target !== null && target !== widest && (
+        <div className="row-actions">
+          <button className="secondary small" onClick={() => { onScale(target / widest); setTarget(null); }}>
+            Scale piece and design to {Math.round((target / widest) * 100)}%
+          </button>
+          <button className="secondary small" onClick={() => setTarget(null)}>Cancel</button>
+        </div>
+      )}
       <p className="hint">
         Measure the outside at the stage you'll paint. A tape round the piece gives circumference, and circumference ÷ 3.14 = Ø.
         Add measurements in between for bellied or waisted shapes. The surface runs {S.toFixed(1)} mm from base to rim.
+        Scaling grows the band, the motifs, and the lines with the piece. Margins and thickness keep their values.
       </p>
     </Section>
   );
 }
 
-export function Controls({ s, set, onPhoto }: { s: Settings; set: Set; onPhoto: () => void }) {
+export function Controls({ s, set, onPhoto, onScale }: { s: Settings; set: Set; onPhoto: () => void; onScale: (k: number) => void }) {
   const S = surfaceLength(s.piece);
   return (
     <aside className="panel controls" aria-label="Piece and stencil settings">
-      <PieceEditor s={s} set={set} onPhoto={onPhoto} />
+      <PieceEditor s={s} set={set} onPhoto={onPhoto} onScale={onScale} />
 
       <Section title="Paint band">
         <NumberField label="From (up from the base)" unit="mm" value={s.bandFrom} min={0} step={0.5} onChange={(v) => set('bandFrom', v)} />
@@ -102,6 +115,15 @@ export function Controls({ s, set, onPhoto }: { s: Settings; set: Set; onPhoto: 
         <SelectField label="Covers" value={s.coverage} onChange={(v) => set('coverage', v)} options={[
           [1, 'all the way round'], [0.5, 'half (use twice)'], [1 / 3, 'a third (use 3×)'], [0.25, 'a quarter (use 4×)'], [1 / 6, 'a sixth (use 6×)'],
         ]} />
+        {s.coverage < 1 && (
+          <>
+            <CheckField label="Repeat marks in the margins" value={s.marks} onChange={(v) => set('marks', v)} />
+            {s.marks && <p className="hint">
+              Mark the piece through the 4 small holes with a pencil, which burns off in the kiln. Then move the stencil
+              along until the 2 holes at its start sit on the 2 marks its end left, and paint again.
+            </p>}
+          </>
+        )}
         <SelectField label="Print as" value={s.printAs} onChange={(v) => set('printAs', v)}
           options={[['flat', 'flat sheet'], ['shell', 'curved shell']]} />
         <p className="hint">{s.printAs === 'shell'

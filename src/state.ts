@@ -20,6 +20,8 @@ export interface Settings {
   holdFlaps: boolean;
   /** 'flat' prints a sheet you bend round the pot. 'shell' prints it already curved, standing upright. */
   printAs: 'flat' | 'shell';
+  /** Cuts repeat marks into the margins of a stencil that covers part of the way round. */
+  marks: boolean;
   /** Gap between a curved shell and the pot, in mm. */
   clearance: number;
   /** Props a curved shell's wide hole tops with thin posts, and the longest bridge left between them, in mm. */
@@ -35,7 +37,7 @@ export interface Settings {
 export const DEFAULTS: Settings = {
   piece: { name: 'Flared mug', profile: [{ z: 0, d: 78 }, { z: 95, d: 86 }] },
   bandFrom: 20, bandTo: 70, above: 5, below: 5, ends: 5, toBase: false,
-  coverage: 0.5, shape: 'arc', thick: 0.6, islandMode: 'bridge', bridge: 1.2, res: 0.15, holdFlaps: true, printAs: 'flat', clearance: 0.2, posts: true, maxBridge: 8,
+  coverage: 0.5, shape: 'arc', thick: 0.6, islandMode: 'bridge', bridge: 1.2, res: 0.15, holdFlaps: true, printAs: 'flat', marks: true, clearance: 0.2, posts: true, maxBridge: 8,
   bedW: 256, bedD: 256,
   nozzle: 0.4, minPlastic: 0.8, minHole: 0.8, strict: true,
   paintColor: '#2b4c8c',

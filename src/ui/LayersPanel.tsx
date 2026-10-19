@@ -11,13 +11,15 @@ interface Props {
   info: Map<string, LayerInfo>;
   errors: Map<string, string>;
   onAutoThreshold: (id: string) => void;
+  /** Opens the design library. */
+  onAddDesign: () => void;
 }
 
 const LINES_THUMB = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56"><rect width="56" height="56" fill="#fbf8f3"/><path d="M4 16h48M4 40h48" stroke="#2a2622" stroke-width="4"/></svg>')}`;
 
 // LayersPanel lists layers top first, like a drawing app. The array itself runs bottom first,
 // because that is the order buildMask() composites them in.
-export function LayersPanel({ layers, setLayers, info, errors, onAutoThreshold }: Props) {
+export function LayersPanel({ layers, setLayers, info, errors, onAutoThreshold, onAddDesign }: Props) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const update = (id: string, patch: Partial<Layer>) => setLayers((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const move = (id: string, dir: 1 | -1) => setLayers((ls) => {
@@ -33,10 +35,13 @@ export function LayersPanel({ layers, setLayers, info, errors, onAutoThreshold }
     <section className="panel mix">
       <div className="layers-head">
         <h2>Layers</h2>
-        <button className="secondary small" onClick={() => setLayers((ls) => [...ls, newLinesLayer()])}>+ Lines</button>
+        <span className="row-actions">
+          <button className="small" onClick={onAddDesign}>+ Add design</button>
+          <button className="secondary small" onClick={() => setLayers((ls) => [...ls, newLinesLayer()])}>+ Lines</button>
+        </span>
       </div>
-      <p className="hint">Each layer repeats on its own. Layers higher in the list paint on top. Click a design in the library to add it as a new top layer.</p>
-      {layers.length === 0 && <p className="hint">No layers yet. Pick a design from the library, or add lines, to start.</p>}
+      <p className="hint">Each layer repeats on its own. Layers higher in the list paint on top. A design you add becomes the new top layer.</p>
+      {layers.length === 0 && <p className="hint">No layers yet. Add a design or lines to start.</p>}
       <ul className="items">
         {[...layers].reverse().map((l, idx) => {
           const set = <K extends keyof Layer>(k: K) => (v: Layer[K]) => update(l.id, { [k]: v } as Partial<Layer>);

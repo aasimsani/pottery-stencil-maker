@@ -7,6 +7,7 @@ import { bandOnPiece, type Band } from './core/piece';
 import { thinFeatures } from './core/thin';
 import { findFlaps, holdFlaps } from './core/flaps';
 import { addPosts, findSags, layerGrid } from './core/overhang';
+import { addMarks } from './core/marks';
 import { printChecks, type Check } from './checks';
 import { renderTile } from './render/tile';
 import { refKey, type Art } from './render/art';
@@ -38,6 +39,8 @@ export interface StencilResult {
   shellSize?: [number, number];
   /** In a curved shell, sagMask marks spans that still print in mid-air (1 = sags), and posts counts the support posts the pipeline added. */
   sagMask?: Uint8Array; posts: number;
+  /** How many repeat marks the margins got. */
+  marks: number;
   /** Where the stencil sits on the piece, and how far a curved wall strays from it. */
   band: Band;
   layerInfo: Map<string, LayerInfo>;
@@ -55,6 +58,8 @@ const FLAP_MAX_BRIDGE = 8;
 const SHELL_SLIT = 3;
 /** The tallest shell the printer builds, in mm (Bambu Lab P2S). */
 const SHELL_MAX_HEIGHT = 250;
+/** A repeat mark is a 2 mm hole, big enough for a pencil tip. */
+const MARK_RADIUS = 1;
 /** Upright shells: 0.2 mm layers, and a shelf may reach 2 mm (about 5 line widths) out unsupported, which
  *  covers the sloping tops of round holes. A point that starts in mid-air may be one 0.4 mm line wide,
  *  which droops too little to matter. maxBridge comes from the settings. */
@@ -147,6 +152,8 @@ export function finishStencil(s: Settings, { gp, maskLayers, layerInfo, band, sh
   const mask = buildMask(g, maskLayers);
   const isl = connectIslands(mask, { mode: s.islandMode, bridgePx: s.bridge / s.res, minIslandPx: 0.5 / (s.res * s.res) });
   removePinches(mask.solid, mask.w, mask.h);
+  const marks = s.marks && s.coverage < 1
+    ? addMarks(mask, g, { radius: MARK_RADIUS, top: gp.frameTop ?? gp.frame, bottom: gp.frameBottom ?? gp.frame }) : 0;
 
   // Pieces hanging off one link narrower than FLAP_NECK lift off the pot when the stencil bends.
   // Holding them at both ends makes them bend with the sheet. New bridges show in the bridge colour.
@@ -208,5 +215,5 @@ export function finishStencil(s: Settings, { gp, maskLayers, layerInfo, band, sh
     flaps: flaps.flaps.length, maxLift, shell, overhang: (Math.atan2(Math.abs(g.dr), g.height) * 180) / Math.PI,
     sags: sags?.spans.length ?? 0, worstSag: Math.max(0, ...(sags?.spans.map((x) => x.length) ?? [])),
   });
-  return { g, gp, mask, isl, rot, pieces, thinPlastic: thinPlastic.mask, thinHoles: thinHoles.mask, checks, flapMask: flaps.mask, flapBridges, shellSize: shell ? shellSize : undefined, sagMask, posts, edgeGap, band, layerInfo };
+  return { g, gp, mask, isl, rot, pieces, thinPlastic: thinPlastic.mask, thinHoles: thinHoles.mask, checks, flapMask: flaps.mask, flapBridges, shellSize: shell ? shellSize : undefined, sagMask, posts, marks, edgeGap, band, layerInfo };
 }

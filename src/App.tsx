@@ -15,6 +15,10 @@ import { LayersPanel } from './ui/LayersPanel';
 import { Preview } from './ui/Preview';
 import { PhotoPiece } from './ui/PhotoPiece';
 import { surfaceLength, type Piece } from './core/piece';
+import { scaleDesign } from './scale';
+import { PlatePanel } from './ui/PlatePanel';
+import { Drawer } from './ui/Drawer';
+import type { PlatePart } from './core/plate';
 
 const download = (blob: Blob, name: string) => {
   const a = document.createElement('a');
@@ -35,6 +39,9 @@ export function App() {
   const worker = useRef<Worker | null>(null), job = useRef(0);
   const [error, setError] = useState('');
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  // ponytail: the plate lives in memory, because a shell STL can be several MB and localStorage holds about 5 MB.
+  const [plate, setPlate] = useState<PlatePart[]>([]);
 
   // Load every layer's design. loadArt() caches, so re-renders don't refetch.
   useEffect(() => {
@@ -115,11 +122,20 @@ export function App() {
     const { stl, name } = exportSTL(s, result);
     download(new Blob([stl], { type: 'model/stl' }), name);
   };
+  const onAddToPlate = () => {
+    if (!result || result.rot === null) return;
+    const { stl, name } = exportSTL(s, result);
+    setPlate((p) => [...p, { name: name.replace(/\.stl$/, ''), stl }]);
+  };
   // A traced piece gets a band over its middle 80%, ready to adjust.
   const usePhotoPiece = (piece: Piece) => {
     const S = surfaceLength(piece);
     set('piece', piece); set('bandFrom', Math.round(S * 0.1)); set('bandTo', Math.round(S * 0.9));
     setPhotoOpen(false);
+  };
+  const onScale = (k: number) => {
+    const [ns, nl] = scaleDesign(s, layers, k);
+    setSettings({ ...ns }); setLayers(nl);
   };
   const onPng = (cv: HTMLCanvasElement) => cv.toBlob((b) => b && download(b, `${baseName}.png`));
 
@@ -130,13 +146,15 @@ export function App() {
         <p>Printable underglaze stencils, fitted to your pot.</p>
       </header>
       <div className="app">
-        <Controls s={s} set={set} onPhoto={() => setPhotoOpen(true)} />
+        <Controls s={s} set={set} onPhoto={() => setPhotoOpen(true)} onScale={onScale} />
         <main>
-          <Preview s={s} result={result} error={error} loading={loading} updating={updating} onPaint={(c) => set('paintColor', c)} onStl={onStl} onPng={onPng} />
-          <LayersPanel layers={layers} setLayers={setLayers} info={result?.layerInfo ?? new Map()} errors={artErrors} onAutoThreshold={autoThreshold} />
+          <Preview s={s} result={result} error={error} loading={loading} updating={updating} onPaint={(c) => set('paintColor', c)} onStl={onStl} onAddToPlate={onAddToPlate} onPng={onPng} />
+          <PlatePanel plate={plate} bedW={s.bedW} bedD={s.bedD} onRemove={(i) => setPlate((p) => p.filter((_, k) => k !== i))}
+            onClear={() => setPlate([])} onDownload={(zip, name) => download(new Blob([zip as BlobPart], { type: 'model/3mf' }), name)} />
+          <LayersPanel layers={layers} setLayers={setLayers} info={result?.layerInfo ?? new Map()} errors={artErrors} onAutoThreshold={autoThreshold} onAddDesign={() => setLibraryOpen(true)} />
         </main>
-        <Library inMix={inMix} onAdd={addDesign} />
       </div>
+      {libraryOpen && <Drawer labelledBy="library-title" onClose={() => setLibraryOpen(false)}><Library inMix={inMix} onAdd={addDesign} /></Drawer>}
       {photoOpen && <PhotoPiece onUse={usePhotoPiece} onClose={() => setPhotoOpen(false)} />}
     </>
   );

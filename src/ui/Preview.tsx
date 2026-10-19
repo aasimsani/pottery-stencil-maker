@@ -18,6 +18,8 @@ interface Props {
   /** True while the worker rebuilds the stencil. */
   updating: boolean;
   onStl: () => void;
+  /** Adds the exact STL that Download STL saves to the plate. */
+  onAddToPlate: () => void;
   onPng: (canvas: HTMLCanvasElement) => void;
   onPaint: (color: string) => void;
 }
@@ -30,7 +32,7 @@ function describe(r: StencilResult, s: Settings): string {
   return `${s.piece.name}: ${size}, printing as ${r.pieces === 1 ? 'one piece' : `${r.pieces} pieces`}, ${errors ? `${errors} print check error${errors > 1 ? 's' : ''}` : 'passing the print check'}.`;
 }
 
-export function Preview({ s, result, error, loading, updating, onStl, onPng, onPaint }: Props) {
+export function Preview({ s, result, error, loading, updating, onStl, onAddToPlate, onPng, onPaint }: Props) {
   const flat = useRef<HTMLCanvasElement>(null), dialog = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<PieceMode>('painted');
   const [expanded, setExpanded] = useState(false);
@@ -172,6 +174,7 @@ export function Preview({ s, result, error, loading, updating, onStl, onPng, onP
       <div className="actions">
         <button onClick={onStl} disabled={!r || r.rot === null || blocked} title={blocked ? 'Fix the print check errors first' : undefined}>Download STL</button>
         {blocked && r.rot !== null && <button className="secondary" onClick={onStl}>Download anyway</button>}
+        <button className="secondary" onClick={onAddToPlate} disabled={!r || r.rot === null || blocked}>Add to plate</button>
         <button className="secondary" onClick={() => flat.current && onPng(flat.current)} disabled={!r}>Download flat PNG</button>
       </div>
 

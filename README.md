@@ -50,6 +50,18 @@ The defaults suit a Bambu Lab P2S with a 0.4 mm nozzle. To use a different bed s
 - Turn the brim off.
 - To reduce stringing, dry your filament, enable wipe while retracting, and run PETG at about 235 °C. A few seconds of hot air from a hair dryer clears any strings that remain.
 
+### Curve a flat sheet with heat
+
+A flat sheet fits better when you curve it before you use it. Hot water heats the whole sheet evenly, so the thin bridges do not warp.
+
+1. Find a cylinder that is 5–10 mm smaller in diameter than the piece, such as a can, a glass jar, or a length of PVC pipe. The plastic springs back a little when it cools, so the smaller form gives a curve that matches the piece.
+2. Put the stencil around the cylinder, with the side that touches the piece facing in. Hold it in place with rubber bands or tape on the margins.
+3. Put the cylinder and the stencil in hot water for about 30 seconds. PETG needs water just off the boil, at 80–90 °C. PLA needs 65–75 °C.
+4. Move the cylinder and the stencil into cold water to set the curve.
+5. Try the stencil on the piece. If the curve is too open, do the steps again on a smaller cylinder.
+
+Do not put the piece itself in the water, because greenware and bisque absorb it. This method suits a straight-sided piece. A tapered piece needs a cone-shaped form with the same taper.
+
 ### Paint with the stencil
 
 Tape the stencil on, or hold it in place with a rubber band. Dab underglaze on with a sponge or a stencil brush, because brushing pushes paint under the edges. Lift the stencil straight off. Bridges leave thin unpainted lines, so touch them up by hand. You can also paint a second pass with the stencil shifted slightly.

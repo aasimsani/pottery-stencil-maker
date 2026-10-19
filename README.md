@@ -25,7 +25,9 @@ Then open http://localhost:5173. Everything runs in your browser, and your brows
 
 To host the app yourself, run `npm run build` and put the `dist/` folder on any static host. You can also serve the folder locally with `npm run preview`.
 
-To host the app on Cloudflare Workers, run `npx wrangler login` once. Then run `npm run deploy`, which builds the app and publishes it to `pottery-stencil-maker.<your-subdomain>.workers.dev`. The file `wrangler.jsonc` configures Cloudflare to serve the build as static assets.
+To host the app on Cloudflare Workers, run `npx wrangler login` once. Then run `npm run deploy`, which builds the app and publishes it to `pottery-stencil-maker.<your-subdomain>.workers.dev`. The file `wrangler.jsonc` configures Cloudflare to serve the build as static assets. If you deploy a fork, replace `account_id` and `routes` in that file with your own.
+
+The workflow `.github/workflows/deploy.yml` deploys every push to `main` after the tests and the build pass. It needs a Cloudflare API token from the **Edit Cloudflare Workers** template, saved as the repository secret `CLOUDFLARE_API_TOKEN`.
 
 ## Make a stencil
 

@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pottery-stencil-maker",
+  "account_id": "0166b7623c3b445802ae08ad398b3fcb",
   "compatibility_date": "2026-10-01",
   // The app runs entirely in the browser, so the Worker serves the Vite build as static assets.
   // The script in src/cloudflare.ts maps the /projects/ URL onto those files.

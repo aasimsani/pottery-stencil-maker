@@ -54,3 +54,21 @@ explains a problem, it also says what to do next.
 5. **Make it accessible by default.** The UI meets WCAG 2.2 AA. Text has 4.5:1 contrast in both
    themes. Every control works from the keyboard, shows visible focus, and has a label. The UI
    respects reduced motion.
+
+## MCP
+
+Claude drives the open tab through an MCP route on the app's own Worker. The design is in `docs/rfc_mcp.html`,
+and the roller maker has the same code.
+
+- `worker/index.ts` is the Worker. It routes `/session/new` (Turnstile and a per-IP limit), `/session/ws` (the tab's
+  socket), `/mcp` (token check, per-session limit, then `createMcpHandler`) and `/mcp/upload` (one-time image upload
+  links). Everything else goes to `src/cloudflare.ts`, which still strips the `/projects/` prefix and serves the build.
+- `worker/session.ts` is the Session Durable Object. It keeps the tab's WebSocket and relays each call with
+  `worker/relay.ts`. It stores only hashes of the tab secret and Claude's token (`worker/token.ts`).
+- `worker/server.ts` builds the MCP tools and the `design_stencil`, `image_prompt` and `review_design` prompts.
+- `src/mcp/tab.ts` answers the calls in the tab. Changes go through `applyOps()` in `src/mcp/ops.ts`, which checks
+  every key, type and choice, and applies a batch whole or not at all. A reply waits until the result on screen is
+  built from the latest inputs (`gen` and `builtGen` in `src/App.tsx`), so it never carries a stale print check.
+- Run it locally with `npm run dev:worker` and `npm run dev`, open http://localhost:5173, press **Connect Claude**, and
+  run the command it shows. `.dev.vars` holds Cloudflare's always-pass Turnstile test secret. `--local-upstream` makes
+  `wrangler dev` report the Vite origin, because the configured route would otherwise make upload links point at aasimsani.net.

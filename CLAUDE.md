@@ -2,6 +2,20 @@
 
 Run `npm test` (Vitest) and `npm run build` before you commit. See README.md for how the pipeline fits together.
 
+## Sister apps
+
+Three apps share one layout, one set of field components and one palette. Each one lives in its own repo:
+
+| App | Repo | Makes |
+|---|---|---|
+| Pottery Stencil Maker | `../pottery-stencil-maker` | flat or curved underglaze stencils |
+| Pottery Rib Maker | `../pottery-rib-maker` | profile ribs with a height scale |
+| Pottery Roller Maker | `../pottery-roller-maker` | texture and underglaze rollers, forked from the stencil maker |
+
+When you change something the apps share, such as `src/ui/fields.tsx`, the tokens at the top of `src/styles.css`, the
+library drawer or the preview layout, make the same change in the sibling repos, so the three stay one family. A new
+tool forks the closest existing app rather than starting fresh.
+
 ## Design Context
 
 ### Users

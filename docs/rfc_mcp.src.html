@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="artifact-id" content="rfc-pottery-mcp">
+<meta name="review-label" content="Comments">
+<meta name="review-labels" content="approve: The reviewer approves this item | blocker: This must change before we build | question: The reviewer needs an answer here">
+<title>Pottery app MCP servers — RFC</title>
+<style>
+  .meta { font: 13px var(--mono); color: var(--ink-3); margin-top: 10px; }
+  .legend { display:flex; gap:18px; flex-wrap:wrap; font: 12px var(--mono); color: var(--ink-3); margin: 6px 0 0; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-2px; margin-right:6px; border:1.5px solid var(--ink-3); }
+  .legend i.hot { border-color: var(--accent); background: var(--accent-soft); }
+  .legend i.ext { border-style: dashed; }
+  svg .life { stroke: var(--rule-strong); stroke-dasharray: 3 4; }
+  svg .msg { font: 12px var(--mono); fill: var(--ink-2); }
+  svg .actor text { font: 13px var(--mono); }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <p class="eyebrow">RFC-001 · Pottery tools · Draft · 2026-11-02</p>
+  <h1>Each app's Cloudflare Worker hosts an MCP server that drives your open tab, so Claude can look at a design, change it and look again until it's right.</h1>
+  <p class="lede">Claude reaches the tab through a live session that you start and approve in the tab. That costs a Durable Object, Turnstile and rate limits on each Worker, and it means no design code is copied, because the tab still does all the drawing. If the Worker session fails, a local server on 127.0.0.1 is the fallback.</p>
+  <p class="meta">Author Claude for Aasim · Reviewers Aasim · Decide by —</p>
+</header>
+<div class="page"><nav class="toc"></nav><main>
+
+<section id="problem">
+  <p class="eyebrow">01 · Problem and goal</p>
+  <h2>Claude can't see or change a design in the apps, so it can't improve one on its own.</h2>
+  <aside class="callout" data-tone="high">Pick the three forks in section 04: how Claude authorizes, where the server lives, and how much one change call returns. Then tick the decisions. Phase 1 waits on those answers.</aside>
+  <dl class="stats">
+    <div><dt>Apps</dt><dd>3</dd></div>
+    <div><dt>Roller settings a design touches</dt><dd>~30</dd></div>
+    <div><dt>Fields per layer</dt><dd>25</dd></div>
+    <div data-tone="med"><dt>Browser-tool steps per tweak today</dt><dd><span class="claim" data-evidence="guess">5–10</span></dd></div>
+  </dl>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 250" role="img" aria-label="The design loop: look, judge, change one or more things, look again, keep or restore">
+      <g class="node hot"><rect x="20" y="95" width="150" height="60" rx="6"/><foreignObject x="20" y="95" width="150" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">look<small>preview + check</small></div></foreignObject></g>
+      <g class="node"><rect x="210" y="95" width="150" height="60" rx="6"/><foreignObject x="210" y="95" width="150" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">judge<small>against the rules</small></div></foreignObject></g>
+      <g class="node hot"><rect x="400" y="95" width="150" height="60" rx="6"/><foreignObject x="400" y="95" width="150" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">change 1 to n things<small>after a checkpoint</small></div></foreignObject></g>
+      <g class="node"><rect x="590" y="95" width="150" height="60" rx="6"/><foreignObject x="590" y="95" width="150" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">keep or restore<small>compare checkpoints</small></div></foreignObject></g>
+      <path class="edge" d="M170,125 L210,125"/>
+      <path class="edge" d="M360,125 L400,125"/>
+      <path class="edge hot" d="M550,125 L590,125"/>
+      <path class="edge async" d="M665,95 L665,40 L95,40 L95,95"/>
+      <g class="label"><rect x="300" y="31" width="160" height="18"/><text x="380" y="40">next round</text></g>
+      <g class="label"><rect x="497" y="110" width="96" height="18"/><text x="545" y="119">one reply</text></g>
+      <path class="edge fallback" d="M665,155 L665,215 L95,215 L95,155"/>
+      <g class="label"><rect x="300" y="206" width="160" height="18"/><text x="380" y="215">you comment in chat</text></g>
+    </svg>
+    <figcaption>A round changes as many things as one idea needs, and they all land in one rebuild with one preview and one print check.</figcaption>
+  </figure>
+  <h3>Goals</h3>
+  <ul>
+    <li>Claude reads the whole design, which is the settings, the layers, the print check and the sizes, in one call.</li>
+    <li>Claude changes settings and layers, adds library designs and local images, and the tab rebuilds as it does after a click.</li>
+    <li>Each round of changes, from one to many, comes back with the new preview image and the new print check, so Claude judges the result straight away.</li>
+    <li>Claude saves checkpoints, compares two of them side by side, and goes back to one, so an experiment never loses a good design.</li>
+    <li>MCP prompts teach Claude the loop and the design rules for each app, and one prompt writes an image-generator prompt sized to the live roller.</li>
+    <li>Claude exports the STL, the 3MF plate and the flat PNG.</li>
+    <li>Nobody can drive a tab you haven't opened and approved.</li>
+  </ul>
+  <h3>Non-goals</h3>
+  <ul>
+    <li>Running the apps without a browser. The drawing code needs a real canvas.</li>
+    <li>Storing designs on the server. They stay in your browser, as they do now.</li>
+    <li>Slicing or sending prints to the P2S.</li>
+  </ul>
+</section>
+
+<section id="constraints">
+  <p class="eyebrow">02 · Constraints</p>
+  <h2>Layer art only renders in a browser, and the live site can't reliably reach localhost, so the Worker relays to the tab.</h2>
+  <table>
+    <thead><tr><th>Constraint</th><th>Set by</th><th>What it forces</th></tr></thead>
+    <tbody>
+      <tr><td>Layer art draws on a DOM canvas and decodes images with <code>new Image()</code>.</td><td>Browser APIs, in <code>src/render/tile.ts:23</code> and <code>src/render/art.ts:47</code></td><td>The tab has to do the drawing, so the server only relays.</td></tr>
+      <tr><td>Chrome restricts a public site's requests to a local address.</td><td>Chrome's Private Network Access rules</td><td>A tab on aasimsani.net talks to its own Worker, not to 127.0.0.1.</td></tr>
+      <tr><td>Each app already runs its own Worker in front of its files.</td><td><code>wrangler.jsonc</code> and <code>src/cloudflare.ts</code> in the stencil and rib repos</td><td>The MCP endpoint and the session socket go in that Worker, on the same origin as the tab.</td></tr>
+      <tr><td>A remote MCP server authorizes clients with OAuth 2.1.</td><td>Model Context Protocol authorization spec</td><td>Claude Code gets a token through an approval page, and every tool call carries it.</td></tr>
+      <tr><td>A Worker request is stateless, and a Durable Object keeps one WebSocket open.</td><td>Cloudflare Workers</td><td>One Durable Object holds each live session and its tab socket.</td></tr>
+      <tr><td>The heavy half of each pipeline runs in a Web Worker in the tab.</td><td><code>src/App.tsx:73</code></td><td>A change only finishes when that worker replies, so the bridge waits before it answers.</td></tr>
+      <tr><td>The stencil and rib makers deploy on every push to <code>main</code>.</td><td><code>.github/workflows/deploy.yml:3</code></td><td>Their work goes on a branch.</td></tr>
+      <tr><td>The roller has no Worker or deploy yet.</td><td>Its plan, <code>docs/plan.md</code></td><td>The roller gets the deploy pipeline before its MCP, or runs under <code>wrangler dev</code>.</td></tr>
+      <tr><td>WebGL clears its canvas after each frame.</td><td>WebGL default, <code>src/ui/scene.ts:13</code></td><td>The 3D view renders one frame on demand for each screenshot.</td></tr>
+    </tbody>
+  </table>
+  <h3>What already exists</h3>
+  <ul>
+    <li><code>set()</code> merges one setting and rebuilds, in <code>src/App.tsx:32</code>. The rib maker has the same function in <code>src/App.tsx:25</code>.</li>
+    <li><code>addDesign()</code> adds a library design as a new top layer, in <code>src/App.tsx:116</code>.</li>
+    <li>The Library turns an uploaded file into a design with <code>source: 'upload'</code>, in <code>src/ui/Library.tsx:101</code>.</li>
+    <li>The library searches are plain functions, such as <code>searchBuiltin()</code> in <code>src/sources/builtin.ts:82</code> and <code>searchIconify()</code> in <code>src/sources/iconify.ts:94</code>.</li>
+    <li>The STL is ready in <code>result.stl</code> (<code>src/App.tsx:121</code>), and <code>plate3mf()</code> writes the plate (<code>src/core/plate.ts:113</code>).</li>
+    <li>The print check returns plain <code>Check</code> objects with one-click fixes, in <code>src/checks.ts</code>, so a tool reply can carry them as they are.</li>
+    <li>The Worker's fetch handler already routes the app's URL prefix, in <code>src/cloudflare.ts</code>.</li>
+  </ul>
+</section>
+
+<section id="options">
+  <p class="eyebrow">03 · Options</p>
+  <h2>A remote MCP on each Worker, relaying to the tab, beats a local server and a headless copy.</h2>
+  <table>
+    <thead><tr><th>Option</th><th>Works on the live site</th><th>Renders layer art</th><th>You watch it live</th><th>Abuse surface</th><th>Size</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td><b>A · Remote MCP on the Worker, relayed to the tab</b></td><td>yes</td><td>yes, with the app's code</td><td>yes</td><td>a public endpoint, guarded</td><td>L per app</td><td data-tone="good"><b>Chosen</b></td></tr>
+      <tr><td><b>B · Local stdio server, tab dials 127.0.0.1</b></td><td>dev server only</td><td>yes</td><td>yes</td><td>this Mac only</td><td>M per app</td><td data-tone="med">Fallback</td></tr>
+      <tr><td><b>C · Headless Node pipeline</b></td><td>not needed</td><td>only with a native canvas</td><td>no</td><td>this Mac only</td><td>L per app</td><td data-tone="crit">Rejected</td></tr>
+      <tr><td><b>D · Chrome browser tools only</b></td><td>yes</td><td>yes</td><td>yes</td><td>none new</td><td>none</td><td data-tone="med">Today</td></tr>
+    </tbody>
+  </table>
+  <figure class="diagram">
+    <svg viewBox="0 0 770 240" role="img" aria-label="Option A relays through the Worker, and option B dials a local server">
+      <text x="10" y="24" class="msg">A · remote</text>
+      <g class="node"><rect x="10" y="36" width="140" height="60" rx="6"/><foreignObject x="10" y="36" width="140" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">Claude Code</div></foreignObject></g>
+      <g class="node hot"><rect x="200" y="36" width="190" height="60" rx="6"/><foreignObject x="200" y="36" width="190" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">Worker /mcp<small>OAuth, rate limits</small></div></foreignObject></g>
+      <g class="node hot"><rect x="430" y="36" width="160" height="60" rx="6"/><foreignObject x="430" y="36" width="160" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">session object<small>one per tab</small></div></foreignObject></g>
+      <g class="node"><rect x="630" y="36" width="130" height="60" rx="6"/><foreignObject x="630" y="36" width="130" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">app tab<small>does the work</small></div></foreignObject></g>
+      <path class="edge" d="M150,66 L200,66"/>
+      <path class="edge hot" d="M390,66 L430,66"/>
+      <path class="edge hot" d="M590,66 L630,66"/>
+      <text x="10" y="144" class="msg">B · local</text>
+      <g class="node"><rect x="10" y="156" width="140" height="60" rx="6"/><foreignObject x="10" y="156" width="140" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">Claude Code</div></foreignObject></g>
+      <g class="node"><rect x="200" y="156" width="190" height="60" rx="6"/><foreignObject x="200" y="156" width="190" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">node mcp/server.ts<small>127.0.0.1</small></div></foreignObject></g>
+      <g class="node"><rect x="430" y="156" width="160" height="60" rx="6"/><foreignObject x="430" y="156" width="160" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">dev tab<small>localhost only</small></div></foreignObject></g>
+      <path class="edge" d="M150,186 L200,186"/>
+      <path class="edge" d="M390,186 L430,186"/>
+      <g class="label"><rect x="630" y="177" width="130" height="18"/><text x="695" y="186">no live site</text></g>
+    </svg>
+    <figcaption>Option A works wherever you have the app open, and option B only works against the local dev server.</figcaption>
+  </figure>
+  <p class="legend"><span><i class="hot"></i>new code</span><span><i></i>exists or local</span></p>
+</section>
+
+<section id="solution">
+  <p class="eyebrow">04 · Chosen solution</p>
+  <h2>You start a live session in the tab, Claude Code authorizes against it, and the Worker relays each tool call to the tab.</h2>
+  <ul>
+    <li><b>A wins</b> because it works on aasimsani.net and in dev, renders with the app's own code, and keeps you watching every change.</li>
+    <li><b>B is the fallback</b>, because it avoids a public endpoint. It loses as the main path because Chrome restricts the live site from reaching 127.0.0.1, so it only works against the dev server.</li>
+    <li><b>C loses</b> because the art and library code would need a native canvas and a second copy of the sources, and you couldn't watch it.</li>
+    <li><b>D loses</b> because every tweak takes several clicks and screenshots, and a renamed button breaks it.</li>
+  </ul>
+
+  <h3>The live session</h3>
+  <ol class="stepper">
+    <li><b>Connect Claude</b> in the app's header</li>
+    <li data-tone="low"><b>Turnstile</b> proves you're a person</li>
+    <li><b>Session opens</b> and the tab shows a code</li>
+    <li><b>Claude Code signs in</b> and opens the approval page</li>
+    <li data-tone="good"><b>You approve</b> in the tab with the same code</li>
+  </ol>
+  <ul>
+    <li>A session lasts 2 hours, and it ends when you close the tab, press <b>Disconnect</b>, or leave it idle for 30 minutes.</li>
+    <li>A token only works for its own session, so closing the tab makes the token useless.</li>
+    <li>The tab shows a banner while Claude is connected, and each change Claude makes flashes in the panel it touched.</li>
+  </ul>
+
+  <h3>Abuse prevention</h3>
+  <table>
+    <thead><tr><th>Guard</th><th>Stops</th><th>Limit</th></tr></thead>
+    <tbody>
+      <tr><td>Turnstile before a session opens</td><td>bots opening sessions</td><td>one challenge per session</td></tr>
+      <tr><td>Rate limit on new sessions, per IP</td><td>session flooding</td><td><span class="claim" data-evidence="guess">5 a minute</span></td></tr>
+      <tr><td>Rate limit on tool calls, per token</td><td>a runaway loop</td><td><span class="claim" data-evidence="guess">60 a minute</span></td></tr>
+      <tr><td>Approval in the live tab</td><td>anyone driving a tab you didn't approve</td><td>one client per session</td></tr>
+      <tr><td>Size caps on messages</td><td>huge uploads through the relay</td><td><span class="claim" data-evidence="guess">8 MB for an image, 2 MB for a screenshot</span></td></tr>
+      <tr><td>The Worker only relays, and the tab does the work</td><td>someone using the Worker for compute</td><td>no pipeline runs on Cloudflare</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Tools</h3>
+  <table>
+    <thead><tr><th>Tool</th><th>Apps</th><th>What it does</th><th>Returns</th></tr></thead>
+    <tbody>
+      <tr><td><code>get_state</code></td><td>all</td><td>Reads the settings, the layers or profile, and the result.</td><td>state, summary, checks</td></tr>
+      <tr><td><code>view</code></td><td>all</td><td>Captures the flat view, the 3D view from a named angle, or both.</td><td>PNG images</td></tr>
+      <tr><td><code>update_settings</code></td><td>all</td><td>Merges a patch, after checking every key and type against the defaults.</td><td>summary, checks, and a preview when <code>view: true</code></td></tr>
+      <tr><td><code>add_layer</code>, <code>update_layer</code>, <code>remove_layer</code>, <code>move_layer</code></td><td>stencil, roller</td><td>Edits the layer stack.</td><td>the same as <code>update_settings</code></td></tr>
+      <tr><td><code>search_library</code>, <code>add_design</code>, <code>add_image</code></td><td>stencil, roller</td><td>Finds a design, or sends a local image, and adds it as a layer.</td><td>results, then the same as <code>update_settings</code></td></tr>
+      <tr><td><code>set_profile</code>, <code>pick_shape</code></td><td>rib</td><td>Sets the pot's points, or picks a library shape.</td><td>the same as <code>update_settings</code></td></tr>
+      <tr><td><code>batch</code></td><td>all</td><td>Applies several changes from the tools above in one rebuild. Either every change applies, or none does.</td><td>the same as <code>update_settings</code></td></tr>
+      <tr><td><code>apply_fix</code></td><td>all</td><td>Presses one of a check's fix buttons.</td><td>the same as <code>update_settings</code></td></tr>
+      <tr><td><code>checkpoint</code>, <code>restore</code>, <code>compare</code></td><td>all</td><td>Saves the design under a name, puts one back, or shows two side by side.</td><td>names, summary, or two previews</td></tr>
+      <tr><td><code>export</code></td><td>all</td><td>Saves the STL, the 3MF plate or the flat PNG.</td><td>a download in the tab, plus its size</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Prompts</h3>
+  <table>
+    <thead><tr><th>Prompt</th><th>Arguments</th><th>What it gives Claude</th></tr></thead>
+    <tbody>
+      <tr><td><code>design_roller</code>, <code>design_stencil</code>, <code>design_rib</code></td><td>the pot, the idea</td><td>The loop, the order to set things in, and the app's design rules, such as roller gaps at least as wide as the relief is deep.</td></tr>
+      <tr><td><code>image_prompt</code></td><td>the subject, the style</td><td>An image-generator prompt with the live roller's aspect ratio and its thinnest line and gap as a share of the image height.</td></tr>
+      <tr><td><code>review_design</code></td><td>none</td><td>A checklist for judging the current preview, covering balance, seams, thin parts and how it reads from arm's length.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Trade-offs and caveats</h3>
+  <ul>
+    <li>The Worker becomes a public endpoint, so the abuse guards above have to ship with it.</li>
+    <li>Every tool call crosses the internet twice. A change still waits for the tab's rebuild, which takes about <span class="claim" data-evidence="verified">4 s</span> on the first roller build.</li>
+    <li>Screenshots cost tokens. Each one is scaled to at most 1200 px, which comes to about <span class="claim" data-evidence="guess">1,500 tokens</span>.</li>
+    <li>The roller needs its Worker and deploy pipeline before its MCP goes live.</li>
+    <li>Durable Objects and rate limits are new Cloudflare features on the account, which may cost money past the free tier.</li>
+  </ul>
+  <h3>Fallback</h3>
+  <table>
+    <thead><tr><th>Trigger</th><th>We do</th></tr></thead>
+    <tbody>
+      <tr><td>The session socket drops more than once an hour in normal use.</td><td>Claude uses the local server (option B) against the dev server.</td></tr>
+      <tr><td>A change gets no reply within 20 s.</td><td>The tool returns <code>updating: true</code>, and Claude calls <code>get_state</code> again.</td></tr>
+      <tr><td>The Worker bill passes $5 in a month.</td><td>We turn the MCP route off on the live site and keep it in dev.</td></tr>
+    </tbody>
+  </table>
+  <h3>Decisions to approve</h3>
+  <ul class="checklist">
+    <li><label><input type="checkbox"> <b>D1.</b> A remote MCP on each Worker is the main path, and a local server is the fallback.</label> <span class="owner">Aasim</span></li>
+    <li><label><input type="checkbox"> <b>D2.</b> Claude only reaches a tab through a live session that you started and approved in that tab.</label> <span class="owner">Aasim</span></li>
+    <li><label><input type="checkbox"> <b>D3.</b> Turnstile, two rate limits and size caps ship with the endpoint, never after it.</label> <span class="owner">Aasim</span></li>
+    <li><label><input type="checkbox"> <b>D4.</b> <code>update_settings</code> rejects unknown keys and wrong types, so Claude can't corrupt a saved design.</label> <span class="owner">Aasim</span></li>
+    <li><label><input type="checkbox"> <b>D5.</b> Every change replies after the rebuild, with the new print check.</label> <span class="owner">Aasim</span></li>
+    <li><label><input type="checkbox"> <b>D6.</b> The stencil and rib work goes on a <code>feat/mcp</code> branch and merges only when you say so.</label> <span class="owner">Aasim</span></li>
+  </ul>
+  <div class="ask" data-id="auth" data-default="oauth">
+    <p><b>Claude Code should authorize by…</b></p>
+    <label><input type="radio" name="auth" value="oauth"> OAuth, with the approval shown in the live tab, which Claude Code supports natively (recommended)</label>
+    <label><input type="radio" name="auth" value="code"> A pairing code you paste to Claude, which it passes to a <code>connect</code> tool</label>
+  </div>
+  <div class="ask" data-id="servers" data-default="per-app">
+    <p><b>The MCP endpoint should live in…</b></p>
+    <label><input type="radio" name="servers" value="per-app"> Each app's own Worker, on the same origin as its tab (recommended)</label>
+    <label><input type="radio" name="servers" value="shared"> One shared pottery Worker that all three apps' tabs join</label>
+  </div>
+  <div class="ask" data-id="reply" data-default="opt-in">
+    <p><b>A change call should return…</b></p>
+    <label><input type="radio" name="reply" value="opt-in"> The summary and checks always, and a preview image when Claude asks for one with <code>view: true</code> (recommended)</label>
+    <label><input type="radio" name="reply" value="always"> A preview image every time, which is simpler and costs more tokens</label>
+  </div>
+  <h3>Open questions</h3>
+  <table>
+    <thead><tr><th>Needed</th><th>Who answers</th><th>Question</th><th>What it changes</th></tr></thead>
+    <tbody>
+      <tr><td data-tone="high">before approval</td><td>Aasim</td><td>OAuth or a pairing code?</td><td>Phase 2's size and how you connect.</td></tr>
+      <tr><td data-tone="high">before approval</td><td>Aasim</td><td>Should the roller deploy before its MCP, or run under <code>wrangler dev</code> first?</td><td>Whether Phase 0 includes the roller's deploy pipeline.</td></tr>
+      <tr><td data-tone="med">before build</td><td>Claude, from the docs</td><td>Do Durable Objects and the rate limiting binding fit the Workers free plan?</td><td>The cost row in section 09.</td></tr>
+      <tr><td data-tone="med">before build</td><td>Claude, from the docs</td><td>What message size does a Durable Object WebSocket accept?</td><td>The size caps, and whether images go in chunks.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="overview">
+  <p class="eyebrow">05 · Build plan overview</p>
+  <h2>Each Worker gains an MCP route, an approval page and a session object, and each tab gains a bridge.</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 780 360" role="img" aria-label="Claude Code calls the Worker's MCP route, which relays through a session object to the tab">
+      <g class="node"><rect x="20" y="40" width="170" height="60" rx="6"/><foreignObject x="20" y="40" width="170" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">Claude Code<small>remote MCP client</small></div></foreignObject></g>
+      <g class="node hot" data-detail="Handles Streamable HTTP, checks the OAuth token and the rate limit, and serves the tools and prompts."><rect x="280" y="40" width="200" height="60" rx="6"/><foreignObject x="280" y="40" width="200" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">/mcp route<small>tools, prompts, OAuth</small></div></foreignObject></g>
+      <g class="node hot" data-detail="Asks you to approve Claude in the live tab, then issues a token bound to that session."><rect x="280" y="150" width="200" height="60" rx="6"/><foreignObject x="280" y="150" width="200" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">/authorize page<small>approve in the tab</small></div></foreignObject></g>
+      <g class="node hot" data-detail="One Durable Object per live session. It holds the tab's WebSocket and matches each reply to its request."><rect x="560" y="40" width="200" height="60" rx="6"/><foreignObject x="560" y="40" width="200" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">Session object<small>Durable Object</small></div></foreignObject></g>
+      <g class="node external"><rect x="560" y="150" width="200" height="60" rx="6"/><foreignObject x="560" y="150" width="200" height="60"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">Turnstile<small>Cloudflare</small></div></foreignObject></g>
+      <g class="node"><rect x="280" y="270" width="200" height="70" rx="6"/><foreignObject x="280" y="270" width="200" height="70"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">app tab<small>bridge new · pipeline same</small></div></foreignObject></g>
+      <path class="edge" d="M190,70 L280,70"/>
+      <g class="label"><rect x="198" y="52" width="74" height="18"/><text x="235" y="61">HTTPS</text></g>
+      <path class="edge hot" d="M480,70 L560,70"/>
+      <g class="label"><rect x="488" y="52" width="64" height="18"/><text x="520" y="61">RPC</text></g>
+      <path class="edge hot" d="M660,100 L660,130 L740,130 L740,300 L480,300"/>
+      <g class="label"><rect x="660" y="236" width="92" height="18"/><text x="706" y="245">WebSocket</text></g>
+      <path class="edge async" d="M105,100 L105,180 L280,180"/>
+      <g class="label"><rect x="120" y="162" width="104" height="18"/><text x="172" y="171">sign in once</text></g>
+      <path class="edge" d="M380,210 L380,270"/>
+      <path class="edge fallback" d="M430,270 L600,210"/>
+      <g class="label"><rect x="466" y="226" width="88" height="18"/><text x="510" y="235">challenge</text></g>
+    </svg>
+    <figcaption>The Worker only checks and relays, and the tab still does every bit of drawing and checking.</figcaption>
+  </figure>
+  <p class="legend"><span><i class="hot"></i>new code</span><span><i class="ext"></i>third party</span><span><i></i>unchanged</span></p>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 400" role="img" aria-label="Sequence of one change in the design loop">
+      <g class="actor"><text x="80" y="24" text-anchor="middle">Claude</text><text x="260" y="24" text-anchor="middle">Worker</text><text x="440" y="24" text-anchor="middle">Session</text><text x="620" y="24" text-anchor="middle">tab</text></g>
+      <path class="life" d="M80,36 L80,390"/><path class="life" d="M260,36 L260,390"/><path class="life" d="M440,36 L440,390"/><path class="life" d="M620,36 L620,390"/>
+      <path class="edge" d="M80,70 L260,70"/><text x="90" y="62" class="msg">1 update_layer + token</text>
+      <path class="edge" d="M260,92 L274,92 L274,106 L260,106"/><text x="290" y="103" class="msg">2 check token, rate</text>
+      <path class="edge hot" d="M260,150 L440,150"/><text x="270" y="142" class="msg">3 {id, method}</text>
+      <path class="edge hot" d="M440,190 L620,190"/><text x="450" y="182" class="msg">4 over the socket</text>
+      <path class="edge" d="M620,215 L645,215 L645,245 L620,245"/><text x="530" y="262" class="msg">5 validate, set, rebuild</text>
+      <path class="edge hot" d="M620,295 L440,295"/><text x="450" y="287" class="msg">6 checks + preview</text>
+      <path class="edge hot" d="M440,330 L260,330"/><text x="270" y="322" class="msg">7 match by id</text>
+      <path class="edge" d="M260,370 L80,370"/><text x="90" y="362" class="msg">8 tool result + image</text>
+    </svg>
+    <figcaption>The tab answers only after its rebuild, so the reply always carries the new print check and preview.</figcaption>
+  </figure>
+  <figure class="diagram">
+    <svg viewBox="0 0 820 220" role="img" aria-label="PR dependency graph">
+      <g class="node"><rect x="10" y="80" width="130" height="56" rx="6"/><foreignObject x="10" y="80" width="130" height="56"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">P0 roller Worker<small>deploy</small></div></foreignObject></g>
+      <g class="node hot"><rect x="180" y="80" width="130" height="56" rx="6"/><foreignObject x="180" y="80" width="130" height="56"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">P1 session<small>relay + guards</small></div></foreignObject></g>
+      <g class="node hot"><rect x="350" y="80" width="130" height="56" rx="6"/><foreignObject x="350" y="80" width="130" height="56"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">P2 MCP + auth<small>roller</small></div></foreignObject></g>
+      <g class="node hot"><rect x="520" y="80" width="130" height="56" rx="6"/><foreignObject x="520" y="80" width="130" height="56"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">P3 tools<small>roller</small></div></foreignObject></g>
+      <g class="node"><rect x="680" y="20" width="130" height="56" rx="6"/><foreignObject x="680" y="20" width="130" height="56"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">P4 port<small>stencil</small></div></foreignObject></g>
+      <g class="node"><rect x="680" y="140" width="130" height="56" rx="6"/><foreignObject x="680" y="140" width="130" height="56"><div class="fo" xmlns="http://www.w3.org/1999/xhtml">P5 port<small>rib</small></div></foreignObject></g>
+      <path class="edge" d="M140,108 L180,108"/>
+      <path class="edge" d="M310,108 L350,108"/>
+      <path class="edge" d="M480,108 L520,108"/>
+      <path class="edge" d="M650,100 L680,48"/>
+      <path class="edge" d="M650,116 L680,168"/>
+    </svg>
+    <figcaption>The roller carries the whole stack first, and the stencil and rib ports copy it in parallel.</figcaption>
+  </figure>
+  <ol class="chain">
+    <li>A request reaches <code>/mcp</code> with a token.</li>
+    <li>The Worker checks the token, then the per-token rate limit.</li>
+    <li data-tone="crit">A token whose session has ended gets 401, and Claude Code asks you to sign in again.</li>
+    <li>A live token goes to its Session object, which forwards it to the one tab you approved.</li>
+  </ol>
+</section>
+
+<section id="phases">
+  <p class="eyebrow">06 · Phases</p>
+  <h2>The roller gets the whole stack first, and the other two copy it.</h2>
+  <h3>Phase 0 · Roller Worker</h3>
+  <p>The roller gets the stencil maker's <code>wrangler.jsonc</code>, <code>src/cloudflare.ts</code> and deploy workflow, with its own route. This phase ships green with the tests it copies, because it only adds the deploy.</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>PR</th><th>Waits on</th><th>First failing test</th></tr></thead>
+    <tbody><tr><td class="num">0</td><td>Roller Worker and deploy pipeline</td><td>the forks</td><td>none, because the copied <code>cloudflare.test.ts</code> already covers the prefix</td></tr></tbody>
+  </table>
+  <p><b>Done when</b> the roller loads at its aasimsani.net route.</p>
+
+  <h3>Phase 1 · Live session and guards</h3>
+  <p>The tab opens a session after Turnstile, and the Session object relays messages and enforces the limits.</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>PR</th><th>Waits on</th><th>First failing test</th></tr></thead>
+    <tbody><tr><td class="num">1</td><td>Session object, the tab bridge's socket, Turnstile and rate limits</td><td>P0</td><td>A message sent to the session reaches the tab, and its reply comes back with the same id.</td></tr></tbody>
+  </table>
+  <table>
+    <thead><tr><th>Test</th><th>Invariant it protects</th><th>Kind</th></tr></thead>
+    <tbody>
+      <tr><td>A message reaches the tab, and its reply comes back with the same id.</td><td>Every command gets its own reply.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>A session opened without a passing Turnstile token is refused.</td><td>Bots can't open sessions.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>The sixth session from one IP in a minute gets 429.</td><td>Nobody can flood the Worker with sessions.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>A message over the size cap is refused before it reaches the tab.</td><td>The relay can't carry huge payloads.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>A session ends when its tab disconnects, and later messages get 410.</td><td>A closed tab can't be driven.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>The Durable Object class exports and binds.</td><td>none</td><td data-tone="nit">scaffolding, not written</td></tr>
+    </tbody>
+  </table>
+  <p><b>Done when</b> a tab on the roller's route opens a session and echoes a test message.</p>
+
+  <h3>Phase 2 · MCP route and authorization</h3>
+  <p>The Worker serves MCP at <code>/mcp</code>, and Claude Code gets a token through the approval page in the live tab.</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>PR</th><th>Waits on</th><th>First failing test</th></tr></thead>
+    <tbody><tr><td class="num">2</td><td><code>/mcp</code>, OAuth, the approval page in the tab, and the prompts</td><td>P1</td><td>A tool call without a token gets 401.</td></tr></tbody>
+  </table>
+  <table>
+    <thead><tr><th>Test</th><th>Invariant it protects</th><th>Kind</th></tr></thead>
+    <tbody>
+      <tr><td>A tool call without a token gets 401.</td><td>Nobody drives a tab without signing in.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>A token for one session can't reach another session's tab.</td><td>Your token only drives your tab.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>The approval page only issues a token after the live tab approves.</td><td>Approval happens where you're looking.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>The 61st tool call in a minute gets 429.</td><td>A runaway loop stops.</td><td data-tone="good">invariant</td></tr>
+      <tr><td><code>image_prompt</code> puts the live roller's aspect ratio and line share into its text.</td><td>The image brief matches the roller you'll print.</td><td data-tone="good">invariant</td></tr>
+    </tbody>
+  </table>
+  <p><b>Done when</b> Claude Code signs in to the roller and lists its prompts.</p>
+
+  <h3>Phase 3 · Roller tools</h3>
+  <p>The roller's bridge applies each tool through the app's own setters, waits for the rebuild, and returns the checks and an optional preview.</p>
+  <table>
+    <thead><tr><th class="num">#</th><th>PR</th><th>Waits on</th><th>First failing test</th></tr></thead>
+    <tbody><tr><td class="num">3</td><td>State, view, settings, layers, batch, library, images, fixes, checkpoints and export</td><td>P2</td><td>A settings patch with an unknown key is rejected, and the saved design stays the same.</td></tr></tbody>
+  </table>
+  <table>
+    <thead><tr><th>Test</th><th>Invariant it protects</th><th>Kind</th></tr></thead>
+    <tbody>
+      <tr><td>A patch with an unknown key or a wrong type is rejected, and the design stays the same.</td><td>Claude can't corrupt a saved design.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>A nested <code>build</code> patch keeps the build fields it doesn't name.</td><td>A partial patch never drops settings.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>A change's reply carries the result of the rebuild it caused.</td><td>The check in a reply is never stale.</td><td data-tone="good">invariant</td></tr>
+      <tr><td><code>restore</code> after <code>checkpoint</code> gives back the same settings and layers.</td><td>An experiment never loses a good design.</td><td data-tone="good">invariant</td></tr>
+      <tr><td><code>apply_fix</code> with a fix the check didn't offer is rejected.</td><td>Claude only presses buttons that exist.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>A <code>batch</code> with one bad change leaves the design as it was.</td><td>A round never half-applies.</td><td data-tone="good">invariant</td></tr>
+      <tr><td>A <code>batch</code> of five changes triggers one rebuild and one reply.</td><td>A round costs one wait and one preview, however many things it changes.</td><td data-tone="good">invariant</td></tr>
+    </tbody>
+  </table>
+  <p><b>Done when</b> Claude loads the Hollow Knight image, runs the loop until the check passes, and exports the STL, all from tools.</p>
+
+  <h3>Phase 4 · Stencil port</h3>
+  <table>
+    <thead><tr><th class="num">#</th><th>PR</th><th>Waits on</th><th>First failing test</th></tr></thead>
+    <tbody><tr><td class="num">4</td><td>Copy the session, the route and the bridge, and map the stencil's settings and prompt</td><td>P3</td><td>A patch to <code>coverage</code> outside the allowed shares is rejected.</td></tr></tbody>
+  </table>
+  <p><b>Done when</b> the Phase 3 tests pass against the stencil maker on <code>feat/mcp</code>.</p>
+
+  <h3>Phase 5 · Rib port</h3>
+  <table>
+    <thead><tr><th class="num">#</th><th>PR</th><th>Waits on</th><th>First failing test</th></tr></thead>
+    <tbody><tr><td class="num">5</td><td>Copy the stack, and add <code>set_profile</code>, <code>pick_shape</code> and the rib prompt</td><td>P3</td><td>A profile whose points fold back on themselves is rejected by the app's own guards.</td></tr></tbody>
+  </table>
+  <p><b>Done when</b> Claude can pick a shape, edit a point and export the rib on <code>feat/mcp</code>, and the docs in all three repos name the <code>claude mcp add</code> command.</p>
+
+  <h3>Todos · Phase 0</h3>
+  <ul class="checklist">
+    <li><label><input type="checkbox"> Copy <code>wrangler.jsonc</code>, <code>src/cloudflare.ts</code> and its test into the roller, with the roller's route</label> <span class="owner">Claude</span></li>
+    <li><label><input type="checkbox"> Copy the deploy workflow, and set the Cloudflare secret on the roller repo</label> <span class="owner">Aasim · secret</span></li>
+    <li><label><input type="checkbox"> Deploy and load the roller at its route</label> <span class="owner">Claude</span></li>
+  </ul>
+</section>
+
+<section id="appendix">
+  <p class="eyebrow">07 · Appendix</p>
+  <h2>Reference detail for reviewers who check the specifics.</h2>
+  <details><summary>Wire format between the Session object and the tab</summary>
+    <pre><code class="language-ts">// Session → tab
+{ "id": 7, "method": "updateLayer", "params": { "id": "a1", "patch": { "grow": 0.3 }, "view": true } }
+// tab → Session
+{ "id": 7, "result": { "summary": { "roller": { "diameter": 40, "length": 73 }, "grams": 26 }, "checks": [], "preview": "data:image/png;base64,…" } }
+{ "id": 8, "error": { "message": "Unknown setting: dept. Did you mean depth?" } }</code></pre>
+  </details>
+  <details><summary>The design_roller prompt, in outline</summary>
+    <ol>
+      <li>Call <code>get_state</code> and <code>view</code>, and say what you see before you change anything.</li>
+      <li>Fix errors first, then warnings, then looks.</li>
+      <li>Save a checkpoint before each round. Change as many things as one idea needs, and send them together with <code>batch</code>, so they share one rebuild.</li>
+      <li>Judge each preview against the rules: lines and gaps at least two nozzle widths, gaps at least as wide as the relief is deep, relief spread evenly round the turn, and no straight lines along the axle.</li>
+      <li>Keep a round only when the check and the preview both get better. Otherwise restore.</li>
+      <li>Stop when the check passes and the preview reads well, and ask you before you export.</li>
+    </ol>
+  </details>
+  <details><summary>Option B and option C in full</summary>
+    <p>Option B runs <code>node mcp/server.ts</code> as a stdio MCP server, which opens a WebSocket on 127.0.0.1, and the tab dials it when its URL carries <code>?mcp</code>. It needs no public endpoint and no sign-in, and it's the fallback. It loses as the main path because Chrome's Private Network Access rules restrict a public site's requests to local addresses, so it only works against the dev server.</p>
+    <p>Option C would import the pipeline into Node. Lines layers already work there, because <code>src/core/lines.ts</code> draws without a canvas. Every other layer goes through <code>renderTile()</code> and <code>loadArt()</code>, which need a canvas, image decoding and SVG rasterizing, so it means adding <code>@napi-rs/canvas</code> and keeping a Node copy of each source in step with the browser one.</p>
+  </details>
+  <details><summary>Sources</summary>
+    <ul>
+      <li><code>src/render/tile.ts:23</code> and <code>src/render/art.ts:47</code> show where art needs the DOM.</li>
+      <li><code>src/App.tsx:32</code>, <code>:73</code>, <code>:116</code> and <code>:121</code> show the setters, the worker, the design adder and the STL.</li>
+      <li><code>src/ui/Library.tsx:101</code> shows the upload design shape.</li>
+      <li><code>src/ui/scene.ts:13</code> shows the WebGL renderer options.</li>
+      <li><code>wrangler.jsonc</code>, <code>src/cloudflare.ts</code> and <code>.github/workflows/deploy.yml:3</code> in the stencil and rib repos show the Workers and their deploy trigger.</li>
+      <li>The 4 s first build was measured in the roller tab on 2026-11-02.</li>
+    </ul>
+  </details>
+</section>
+
+<section id="tickets">
+  <p class="eyebrow">08 · Proposed tickets</p>
+  <h2>Six tickets cover the work, and none exist yet.</h2>
+  <table>
+    <thead><tr><th>Ticket</th><th>Covers</th><th>Phase</th><th>Size</th><th>Area</th><th>Owner</th><th>Linear</th></tr></thead>
+    <tbody>
+      <tr><td>Roller Worker and deploy</td><td>P0</td><td>0</td><td>S</td><td>roller</td><td>unassigned</td><td>new</td></tr>
+      <tr><td>Live session, Turnstile and rate limits</td><td>P1</td><td>1</td><td>M</td><td>roller</td><td>unassigned</td><td>new</td></tr>
+      <tr><td>MCP route, OAuth and prompts</td><td>P2</td><td>2</td><td>L</td><td>roller</td><td>unassigned</td><td>new</td></tr>
+      <tr><td>Roller tools</td><td>P3</td><td>3</td><td>M</td><td>roller</td><td>unassigned</td><td>new</td></tr>
+      <tr><td>Stencil maker port</td><td>P4</td><td>4</td><td>M</td><td>stencil</td><td>unassigned</td><td>new</td></tr>
+      <tr><td>Rib maker port</td><td>P5</td><td>5</td><td>M</td><td>rib</td><td>unassigned</td><td>new</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="blast">
+  <p class="eyebrow">09 · Blast radius</p>
+  <h2>The change adds a public endpoint to each Worker, so the guards matter more than the tools.</h2>
+  <table>
+    <thead><tr><th>Surface</th><th>What changes</th><th>Who's affected</th><th>How it fails</th><th>How we notice</th><th>Rollback</th></tr></thead>
+    <tbody>
+      <tr><td>Worker endpoint</td><td><code>/mcp</code>, <code>/authorize</code> and <code>/session</code> go public.</td><td>Anyone on the internet</td><td>Someone floods it, or finds a way past the approval.</td><td>The Cloudflare dashboard shows request and 429 spikes.</td><td>Remove the routes and redeploy, which leaves the app as it is today.</td></tr>
+      <tr><td>App bundle</td><td>A bridge and a <b>Connect Claude</b> button load, and they stay idle until you press it.</td><td>Every visitor</td><td>The bridge throws on load and blanks the page.</td><td>The tests and the build fail, or the deploy shows a blank page.</td><td>Revert the bridge import in <code>App.tsx</code>.</td></tr>
+      <tr><td>Saved designs</td><td>Claude writes the same localStorage state your clicks write.</td><td>You</td><td>A bad patch saves a broken design.</td><td>The key and type check rejects it, and <code>get_state</code> shows the result.</td><td>Call <code>restore</code> with a checkpoint.</td></tr>
+      <tr><td>Cloudflare bill</td><td>Durable Objects, Turnstile and rate limits join the account.</td><td>You</td><td>Usage passes the free tier.</td><td>Cloudflare's billing alert at $5.</td><td>Turn the MCP routes off on the live site.</td></tr>
+      <tr><td>3D view</td><td>The view renders one frame on demand for each screenshot.</td><td>Every visitor</td><td>A screenshot comes back blank.</td><td>The <code>view</code> test compares the image with a blank frame.</td><td>Keep the last frame with <code>preserveDrawingBuffer</code>.</td></tr>
+      <tr><td>Deploys</td><td>The stencil and rib work lands on <code>feat/mcp</code>.</td><td>Site visitors</td><td>A merge ships a broken bridge.</td><td>The deploy workflow runs the tests before it publishes.</td><td>Revert the merge commit on <code>main</code>.</td></tr>
+    </tbody>
+  </table>
+  <h3>Cross-cutting</h3>
+  <ul>
+    <li><b>Security.</b> Claude only reaches a tab you opened, passed Turnstile in and approved. Tokens die with their session, and both rate limits cap what a stolen token could do.</li>
+    <li><b>Privacy.</b> Designs, images and previews pass through the Worker in memory and aren't stored. The Session object keeps only its id, its expiry and the approved client.</li>
+    <li><b>Cost.</b> The Worker relays small messages and never runs the pipeline. The open question on the free plan decides whether this costs anything.</li>
+    <li><b>Observability.</b> The Worker logs each tool call's name, session and duration, never its contents, and Workers Logs keeps them.</li>
+  </ul>
+  <p><b>Untouched.</b> The pipelines, the Web Workers, the print checks, the mesh code and the static file routes stay as they are.</p>
+</section>
+
+</main></div>
+</body>
+</html>

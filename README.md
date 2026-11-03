@@ -31,14 +31,27 @@ The workflow `.github/workflows/deploy.yml` deploys every push to `main` after t
 
 ## Use with Claude
 
-Claude can look at your stencil, change it and look again while you watch, through an MCP server on the app's Worker.
+Claude can look at your stencil, change it, and look again while you watch. It connects through a Model Context Protocol
+(MCP) server on the app's Cloudflare Worker. It only works while your tab is open.
 
-1. Run `npm run dev:worker` and `npm run dev`, then open http://localhost:5173.
-2. Press **Connect Claude** in the header, and pass the person check.
-3. Run the `claude mcp add` command the panel shows. Claude can then use the `pottery-stencil` tools and the
-   `design_stencil` prompt while the tab stays open.
+1. Open the app at https://aasimsani.net/projects/pottery-stencil-maker/.
+2. Select **Connect Claude** in the header.
+3. Complete the person check.
+4. Copy the `claude mcp add` command from the panel.
+5. Run the command in a terminal.
+6. Start a new Claude Code session.
+7. Run the `/mcp__pottery-stencil__design_stencil` prompt.
 
-The session lasts a week, and it only works while its tab is connected. Press **Disconnect** to end it.
+The session lasts one week. Claude can only change the design while your tab stays open. To end the session, select
+**Disconnect**.
+
+To run the app on your computer:
+
+1. Run `npm run dev:worker`.
+2. In a second terminal, run `npm run dev`.
+3. Open http://localhost:5173.
+
+The local Worker uses the Turnstile test key from `.dev.vars.example`. As a result, the person check always passes.
 
 ## Make a stencil
 

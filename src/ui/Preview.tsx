@@ -5,6 +5,7 @@ import { drawFlat } from '../render/preview';
 import type { PieceMode } from './Piece3D';
 import { exportSTL } from '../export';
 import { useDialog } from './dialog';
+import { describeFix, SpotFixer } from './SpotFixer';
 import { registerViewMode } from '../mcp/viewMode';
 
 // three.js is about 600 kB, so the 3D view loads after the rest of the page.
@@ -23,6 +24,8 @@ interface Props {
   onAddToPlate: () => void;
   onPng: (canvas: HTMLCanvasElement) => void;
   onPaint: (color: string) => void;
+  /** Sets any setting. The spot fixes use it. */
+  onSet: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
 }
 
 // describe() is the spoken summary of the stencil, for the previews' text alternatives.
@@ -33,7 +36,7 @@ function describe(r: StencilResult, s: Settings): string {
   return `${s.piece.name}: ${size}, printing as ${r.pieces === 1 ? 'one piece' : `${r.pieces} pieces`}, ${errors ? `${errors} print check error${errors > 1 ? 's' : ''}` : 'passing the print check'}.`;
 }
 
-export function Preview({ s, result, error, loading, updating, onStl, onAddToPlate, onPng, onPaint }: Props) {
+export function Preview({ s, result, error, loading, updating, onStl, onAddToPlate, onPng, onPaint, onSet }: Props) {
   const flat = useRef<HTMLCanvasElement>(null), dialog = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<PieceMode>('painted');
   const [expanded, setExpanded] = useState(false);
@@ -106,7 +109,10 @@ export function Preview({ s, result, error, loading, updating, onStl, onAddToPla
       <div className="previews">
         <div>
           <h2 id="preview-title">{s.printAs === 'shell' ? 'Stencil, unrolled' : 'Stencil, as printed'}</h2>
-          <canvas ref={flat} className="flat" role="img" aria-label={label ? `Flat view of ${label}` : 'Stencil preview'} />
+          <div className="flat-wrap">
+            <canvas ref={flat} className="flat" role="img" aria-label={label ? `Flat view of ${label}` : 'Stencil preview'} />
+            {r && <SpotFixer r={r} s={s} set={onSet} />}
+          </div>
           {present && (
             <div className="legend">
               <span><i style={{ background: 'var(--plastic)' }} />plastic</span>
@@ -117,6 +123,7 @@ export function Preview({ s, result, error, loading, updating, onStl, onAddToPla
               {present.thinHole && <span><i style={{ background: 'var(--thin-hole)' }} />paint line too thin</span>}
               {present.flap && <span><i style={{ background: 'var(--flap)' }} />lifts when wrapped</span>}
               {present.sag && <span><i style={{ background: 'var(--sag)' }} />prints in mid-air</span>}
+              {(present.thinPlastic || present.thinHole) && <span>Click a thin spot to fix just that one.</span>}
             </div>
           )}
         </div>
@@ -170,6 +177,11 @@ export function Preview({ s, result, error, loading, updating, onStl, onAddToPla
               </li>
             ))}
             {notes.map((n) => <li key={n} className="note"><span aria-hidden="true">•</span>{n}</li>)}
+            {s.spotFixes.length > 0 && (
+              <li className="note"><span aria-hidden="true">•</span>
+                <span>{s.spotFixes.length} spot fix{s.spotFixes.length === 1 ? '' : 'es'}, {r.spotsApplied} on a thin spot now: {s.spotFixes.map(describeFix).join('; ')}. Click a marker on the stencil to undo one.{' '}
+                  <button className="secondary small" onClick={() => onSet('spotFixes', [])}>Clear all</button></span></li>
+            )}
           </ul>
         </>
       )}

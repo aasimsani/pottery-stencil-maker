@@ -5,6 +5,7 @@ import { linePeriod, makeLinesTile } from './core/lines';
 import { fitAngle } from './core/bed';
 import { bandOnPiece, type Band } from './core/piece';
 import { thinFeatures } from './core/thin';
+import { applySpotFixes, dropSpots } from './core/spotfix';
 import { findFlaps, holdFlaps } from './core/flaps';
 import { addPosts, findSags, layerGrid } from './core/overhang';
 import { addMarks } from './core/marks';
@@ -41,6 +42,8 @@ export interface StencilResult {
   sagMask?: Uint8Array; posts: number;
   /** How many repeat marks the margins got. */
   marks: number;
+  /** How many of the spot fixes found their spot. */
+  spotsApplied: number;
   /** Where the stencil sits on the piece, and how far a curved wall strays from it. */
   band: Band;
   layerInfo: Map<string, LayerInfo>;
@@ -150,6 +153,10 @@ export const computeStencil = (s: Settings, layers: Layer[], arts: Map<string, A
 export function finishStencil(s: Settings, { gp, maskLayers, layerInfo, band, shell, strip }: Prepared): StencilResult {
   const g = geometry(gp), { topD, botD } = gp;
   const mask = buildMask(g, maskLayers);
+  // Spot fixes edit the raw stencil, before bridges, flaps and posts, so those steps see the result.
+  const pPx = s.minPlastic / s.res, hPx = s.minHole / s.res;
+  const at = (f: { u: number; v: number }) => ({ x: f.u * mask.w, y: f.v * mask.h });
+  const spotsApplied = applySpotFixes(mask, s.spotFixes.map((f) => ({ kind: f.kind, ...at(f), action: f.action, byPx: f.by / s.res })), { plasticPx: pPx, holePx: hPx });
   const isl = connectIslands(mask, { mode: s.islandMode, bridgePx: s.bridge / s.res, minIslandPx: 0.5 / (s.res * s.res) });
   removePinches(mask.solid, mask.w, mask.h);
   const marks = s.marks && s.coverage < 1
@@ -202,18 +209,20 @@ export function finishStencil(s: Settings, { gp, maskLayers, layerInfo, band, sh
   // Spots smaller than twice the minimum width squared are pointed tips and square corners, not real problems.
   const holes = new Uint8Array(mask.solid.length);
   for (let k = 0; k < holes.length; k++) holes[k] = mask.inside[k] && !mask.solid[k] ? 1 : 0;
-  const pPx = s.minPlastic / s.res, hPx = s.minHole / s.res;
-  const thinPlastic = thinFeatures(mask.solid, mask.w, mask.h, pPx, 2 * pPx * pPx);
-  const thinHoles = thinFeatures(holes, mask.w, mask.h, hPx, 2 * hPx * hPx);
+  // Spots the user chose to leave drop out of the thin masks. Left plastic still gets its own warning, because it may not print.
+  const left = (kind: 'plastic' | 'hole') => s.spotFixes.filter((f) => f.kind === kind && f.action === 'leave').map(at);
+  const plasticFound = thinFeatures(mask.solid, mask.w, mask.h, pPx, 2 * pPx * pPx);
+  const thinPlastic = dropSpots(plasticFound.mask, mask.w, mask.h, left('plastic'));
+  const thinHoles = dropSpots(thinFeatures(holes, mask.w, mask.h, hPx, 2 * hPx * hPx).mask, mask.w, mask.h, left('hole'));
   let holeArea = 0, thinArea = 0;
   for (let k = 0; k < holes.length; k++) if (holes[k]) { holeArea++; thinArea += thinHoles.mask[k]; }
   const pieces = countPieces(mask.solid, mask.w, mask.h), edgeGap = Math.PI * Math.abs(band.topD - band.botD) * s.coverage;
   const checks = printChecks({
-    pieces, islandMode: s.islandMode, thinPlasticSpots: thinPlastic.spots, thinHoleSpots: thinHoles.spots, thinHoleShare: holeArea ? thinArea / holeArea : 0,
+    pieces, islandMode: s.islandMode, thinPlasticSpots: thinPlastic.spots, thinPlasticLeft: plasticFound.spots - thinPlastic.spots, thinHoleSpots: thinHoles.spots, thinHoleShare: holeArea ? thinArea / holeArea : 0,
     thick: s.thick, nozzle: s.nozzle, minPlastic: s.minPlastic, minHole: s.minHole, bridge: s.bridge,
     above: s.above, below: s.below, ends: s.ends, toBase: s.toBase, fits: rot !== null, curve: band.curve, strip, edgeGap,
     flaps: flaps.flaps.length, maxLift, shell, overhang: (Math.atan2(Math.abs(g.dr), g.height) * 180) / Math.PI,
     sags: sags?.spans.length ?? 0, worstSag: Math.max(0, ...(sags?.spans.map((x) => x.length) ?? [])),
   });
-  return { g, gp, mask, isl, rot, pieces, thinPlastic: thinPlastic.mask, thinHoles: thinHoles.mask, checks, flapMask: flaps.mask, flapBridges, shellSize: shell ? shellSize : undefined, sagMask, posts, marks, edgeGap, band, layerInfo };
+  return { g, gp, mask, isl, rot, pieces, thinPlastic: thinPlastic.mask, thinHoles: thinHoles.mask, checks, flapMask: flaps.mask, flapBridges, shellSize: shell ? shellSize : undefined, sagMask, posts, marks, spotsApplied, edgeGap, band, layerInfo };
 }

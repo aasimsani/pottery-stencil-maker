@@ -44,3 +44,20 @@ describe('applyOps', () => {
     expect(applyOps(s, [{ op: 'removeLayer', id: 'L1' }]).layers.map((l) => l.id)).not.toContain('L1');
   });
 });
+
+describe('spot fixes through the MCP', () => {
+  it('adds a checked spot fix, and refuses a bad action or a point off the stencil', () => {
+    const fix = { kind: 'hole', u: 0.4, v: 0.5, action: 'widen', by: 0.6 };
+    expect(applyOps(start(), [{ op: 'spotFix', fix }]).settings.spotFixes).toEqual([fix]);
+    expect(() => applyOps(start(), [{ op: 'spotFix', fix: { ...fix, action: 'thicken' } }])).toThrow(/action/);
+    expect(() => applyOps(start(), [{ op: 'spotFix', fix: { ...fix, v: -0.1 } }])).toThrow(/v/);
+  });
+});
+
+describe('undoing one spot fix through the MCP', () => {
+  it('removes the fix at an index, and refuses an index that has no fix', () => {
+    const two = applyOps(start(), [{ op: 'spotFix', fix: { kind: 'plastic', u: 0.1, v: 0.1, action: 'leave', by: 0 } }, { op: 'spotFix', fix: { kind: 'hole', u: 0.2, v: 0.2, action: 'close', by: 0 } }]);
+    expect(applyOps(two, [{ op: 'removeSpotFix', index: 0 }]).settings.spotFixes.map((f) => f.kind)).toEqual(['hole']);
+    expect(() => applyOps(two, [{ op: 'removeSpotFix', index: 5 }])).toThrow(/index/);
+  });
+});

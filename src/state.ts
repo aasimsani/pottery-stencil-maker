@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { IslandMode } from './core/mask';
+import type { SpotAction } from './core/spotfix';
 import type { Piece } from './core/piece';
 import { layersFromMix, newDesignLayer, newLinesLayer, type Layer } from './layers';
 import { builtinRef } from './sources/builtin';
@@ -32,7 +33,12 @@ export interface Settings {
   nozzle: number; minPlastic: number; minHole: number; strict: boolean;
   // Preview
   paintColor: string;
+  /** Fixes for single thin spots, placed as shares (0–1) across and down the flat stencil, so they stay put when the detail changes. */
+  spotFixes: SpotFix[];
 }
+
+/** A fix for one thin spot. by is how much to thicken or widen it, in mm. */
+export interface SpotFix { kind: 'plastic' | 'hole'; u: number; v: number; action: SpotAction; by: number }
 
 export const DEFAULTS: Settings = {
   piece: { name: 'Flared mug', profile: [{ z: 0, d: 78 }, { z: 95, d: 86 }] },
@@ -41,6 +47,7 @@ export const DEFAULTS: Settings = {
   bedW: 256, bedD: 256,
   nozzle: 0.4, minPlastic: 0.8, minHole: 0.8, strict: true,
   paintColor: '#2b4c8c',
+  spotFixes: [],
 };
 
 // settingsFrom() fills saved settings in with defaults. Earlier versions measured only the band

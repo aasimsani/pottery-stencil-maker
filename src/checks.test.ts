@@ -4,6 +4,7 @@ import { printChecks, type CheckInput } from './checks';
 const good: CheckInput = {
   pieces: 1, islandMode: 'bridge', thinPlasticSpots: 0, thinHoleSpots: 0, thinHoleShare: 0,
   thick: 0.8, nozzle: 0.4, minPlastic: 0.8, minHole: 0.8, bridge: 1.6,
+  thinPlasticLeft: 0,
   above: 5, below: 5, ends: 5, toBase: false, fits: true, curve: 0, strip: false, edgeGap: 0, flaps: 0, maxLift: 0, shell: false, overhang: 0, sags: 0, worstSag: 0,
 };
 const ids = (i: Partial<CheckInput>) => printChecks({ ...good, ...i }).map((c) => `${c.level}:${c.id}`);
@@ -62,4 +63,8 @@ test('reaching the base counts as a bottom margin', () => {
 
 test('errors come before warnings', () => {
   expect(ids({ thinHoleSpots: 1, thinHoleShare: 0.01, pieces: 2 })).toEqual(['error:pieces', 'warn:thin-holes']);
+});
+
+test('plastic the user left thin is a warning, because they chose it', () => {
+  expect(ids({ thinPlasticLeft: 2 })).toEqual(['warn:thin-plastic-left']);
 });

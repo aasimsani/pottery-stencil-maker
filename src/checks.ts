@@ -7,6 +7,8 @@ export interface CheckInput {
   islandMode: IslandMode;
   /** Spots of plastic narrower than minPlastic, and paint holes narrower than minHole. */
   thinPlasticSpots: number; thinHoleSpots: number;
+  /** Spots of thin plastic the user chose to leave as drawn. They warn instead of blocking the download. */
+  thinPlasticLeft: number;
   /** Share of the paint area (0–1) taken up by too-thin paint lines. */
   thinHoleShare: number;
   /** Stencil thickness, nozzle size, minimum widths and bridge width, in mm. */
@@ -46,7 +48,9 @@ export function printChecks(i: CheckInput): Check[] {
     ? `Prints as ${i.pieces} separate pieces, because loose pieces are kept. You'll have to place them by hand.`
     : `Prints as ${i.pieces} separate pieces, which will fall apart on the plate. Add a margin or check that the layers leave plastic joining every part.`);
   add(i.thinPlasticSpots === 0, 'thin-plastic', 'error',
-    `${i.thinPlasticSpots} spot${i.thinPlasticSpots > 1 ? 's' : ''} of plastic narrower than ${i.minPlastic} mm, which won't print or will snap when bent. Make the design larger, or reduce Thicken lines and Clear margin around it.`);
+    `${i.thinPlasticSpots} spot${i.thinPlasticSpots > 1 ? 's' : ''} of plastic narrower than ${i.minPlastic} mm, which won't print or will snap when bent. Make the design larger, reduce Thicken lines and Clear margin around it, or click a spot on the stencil to fix just that one.`);
+  add(i.thinPlasticLeft === 0, 'thin-plastic-left', 'warn',
+    `${i.thinPlasticLeft} spot${i.thinPlasticLeft > 1 ? 's' : ''} of plastic narrower than ${i.minPlastic} mm ${i.thinPlasticLeft > 1 ? 'are' : 'is'} left as drawn. ${i.thinPlasticLeft > 1 ? 'They' : 'It'} may not print, or may snap when you bend the stencil.`);
   add(i.fits, 'bed', 'error', 'Too big for the bed at any angle. Pick a smaller "Covers" share or a narrower band.');
   add(!i.shell || i.overhang <= 45, 'shell-overhang', 'error',
     `This band leans ${Math.round(i.overhang)}° from upright, too shallow to print as a curved shell without supports. Print it as a flat sheet instead.`);
@@ -56,7 +60,7 @@ export function printChecks(i: CheckInput): Check[] {
 
   // A few thin tips are normal in fine art. When thin lines are a big share of the paint, the design itself won't paint.
   const brokenDesign = i.thinHoleShare >= THIN_PAINT_ERROR;
-  add(i.thinHoleSpots === 0, 'thin-holes', brokenDesign ? 'error' : 'warn', `${brokenDesign ? `${Math.round(i.thinHoleShare * 100)}% of the paint area is` : `${i.thinHoleSpots} paint line${i.thinHoleSpots > 1 ? 's are' : ' is'}`} narrower than ${i.minHole} mm. The slicer will close ${i.thinHoleSpots > 1 || brokenDesign ? 'them' : 'it'} up and underglaze won't get through. Use Thicken lines on that layer, or make the pattern larger.`);
+  add(i.thinHoleSpots === 0, 'thin-holes', brokenDesign ? 'error' : 'warn', `${brokenDesign ? `${Math.round(i.thinHoleShare * 100)}% of the paint area is` : `${i.thinHoleSpots} paint line${i.thinHoleSpots > 1 ? 's are' : ' is'}`} narrower than ${i.minHole} mm. The slicer will close ${i.thinHoleSpots > 1 || brokenDesign ? 'them' : 'it'} up and underglaze won't get through. Use Thicken lines on that layer, make the pattern larger, or click a spot on the stencil to fix just that one.`);
   add(i.bridge >= 2 * i.nozzle, 'bridge', 'warn', `Bridges narrower than ${2 * i.nozzle} mm (2 nozzle widths) can snap when you wrap the stencil.`);
   add(i.above > 0 || i.below > 0 || i.ends > 0 || i.toBase, 'margins', 'warn', 'No margins, so nothing frames the stencil. It is hard to handle and tape down. Add 3–5 mm.');
   add(i.thick <= 1.2, 'stiff', 'warn', 'Thicker than 1.2 mm, which is stiff to wrap round a pot. 0.6–0.8 mm bends easily.');

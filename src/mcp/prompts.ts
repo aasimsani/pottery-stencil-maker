@@ -28,7 +28,9 @@ export const DESIGN_LOOP = `You are designing an underglaze stencil with the Pot
 Work in rounds, and keep the user in the loop in chat.
 
 1. Call get_state and view, and say what you see before you change anything.
-2. Fix print check errors first, then warnings, then how it looks.
+2. Fix print check errors first, then warnings, then how it looks. Not every warning needs fixing. For each spot, call list_spots and
+   view_spot, then pick a fix with fix_spot: thicken or widen by an amount, open up or close, or leave it as drawn. For many spots on
+   one layer, raise that layer's grow (Thicken lines, in mm) instead of fixing them one by one.
 3. Call checkpoint before each round. Change as many things as one idea needs, and send them together with batch, so they share one rebuild. Ask for view: true when you need to see the result.
 4. Judge the result against the rules below. Keep the round only when the check and the look both get better, and otherwise call restore.
 5. Stop when the check passes and the design reads well from arm's length. Ask the user before you call export.

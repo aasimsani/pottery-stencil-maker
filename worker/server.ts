@@ -57,7 +57,16 @@ export function buildServer(callTab: CallTab, mintUploadUrl: () => Promise<strin
   tool('remove_layer', 'Remove one layer.', z.object({ id: z.string(), view }), (a) => apply([{ op: 'removeLayer', id: a.id }], a.view));
   tool('move_layer', 'Move a layer to a new index. Index 0 is the bottom layer.',
     z.object({ id: z.string(), to: z.number().int(), view }), (a) => apply([{ op: 'moveLayer', id: a.id, to: a.to }], a.view));
-  tool('batch', 'Apply several changes in one rebuild. Either all apply or none does. Each op is one of: {op:"settings",patch}, {op:"addLayer",kind:"lines"}, {op:"addDesign",source,id}, {op:"addImage",url,name}, {op:"updateLayer",id,patch}, {op:"removeLayer",id}, {op:"moveLayer",id,to}.',
+  tool('fix_spot', 'Fix one thin spot the print check flags, chosen by its position as shares across (u) and down (v) the flat stencil. "plastic" is a strip of plastic too thin to print: thicken it by "by" mm, open it up into paint, or leave it. "hole" is a paint line too thin for underglaze: widen it by "by" mm, close it with plastic, or leave it. "leave" keeps the spot as drawn; left plastic still warns that it may not print.',
+    z.object({ kind: z.enum(['plastic', 'hole']), u: z.number().min(0).max(1), v: z.number().min(0).max(1), action: z.enum(['thicken', 'open', 'widen', 'close', 'leave']), by: z.number().min(0).max(10).default(0), view }),
+    (a) => apply([{ op: 'spotFix', fix: { kind: a.kind, u: a.u, v: a.v, action: a.action, by: a.by } }], a.view));
+  tool('list_spots', 'List the spots the print check flags, largest first. Each has a kind ("plastic" is a strip of plastic too thin to print, "hole" is a paint line too thin for underglaze), a point (u, v) that lies on the spot, its size in mm, and its area. Pass the point to view_spot or fix_spot.',
+    z.object({ kind: z.enum(['plastic', 'hole', 'all']).default('all'), limit: z.number().int().min(1).max(200).default(50) }), (a) => callTab('listSpots', a));
+  tool('view_spot', 'See one spot up close: a zoomed crop of the flat stencil round the point (u, v), with a white ring on the point.',
+    z.object({ u: z.number().min(0).max(1), v: z.number().min(0).max(1), zoom: z.number().min(1).max(20).default(4) }), (a) => callTab('viewSpot', a));
+  tool('undo_spot_fix', 'Remove one spot fix by its index in settings.spotFixes, numbered from 0. To remove them all, call update_settings with {"spotFixes": []}.',
+    z.object({ index: z.number().int().min(0), view }), (a) => apply([{ op: 'removeSpotFix', index: a.index }], a.view));
+  tool('batch', 'Apply several changes in one rebuild. Either all apply or none does. Each op is one of: {op:"settings",patch}, {op:"addLayer",kind:"lines"}, {op:"addDesign",source,id}, {op:"addImage",url,name}, {op:"updateLayer",id,patch}, {op:"removeLayer",id}, {op:"moveLayer",id,to}, {op:"spotFix",fix:{kind,u,v,action,by}}, {op:"removeSpotFix",index}.',
     z.object({ ops: z.array(z.record(z.string(), z.unknown())).min(1), view }), (a) => apply(a.ops, a.view));
   tool('checkpoint', 'Save the current design under a name, with its preview, before you experiment.',
     z.object({ name: z.string() }), (a) => callTab('checkpoint', a));

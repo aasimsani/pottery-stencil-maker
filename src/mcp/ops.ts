@@ -11,7 +11,9 @@ export type Op =
   | { op: 'addLayer'; kind: 'design'; ref: DesignRef }
   | { op: 'updateLayer'; id: string; patch: Record<string, unknown> }
   | { op: 'removeLayer'; id: string }
-  | { op: 'moveLayer'; id: string; to: number };
+  | { op: 'moveLayer'; id: string; to: number }
+  | { op: 'spotFix'; fix: Record<string, unknown> }
+  | { op: 'removeSpotFix'; index: number };
 
 export class OpError extends Error {}
 
@@ -97,6 +99,22 @@ export function applyOps(state: DesignState, ops: Op[]): DesignState {
       case 'moveLayer': {
         const i = find(layers, o.id), rest = layers.filter((_, k) => k !== i), to = Math.max(0, Math.min(rest.length, Math.round(o.to)));
         layers = [...rest.slice(0, to), layers[i], ...rest.slice(to)];
+        break;
+      }
+      case 'spotFix': {
+        const f = o.fix ?? {}, kind = f.kind, action = f.action, u = Number(f.u), v = Number(f.v), by = Number(f.by ?? 0);
+        const actions = kind === 'plastic' ? ['thicken', 'open', 'leave'] : kind === 'hole' ? ['widen', 'close', 'leave'] : null;
+        if (!actions) throw new OpError('A spot fix needs kind "plastic" or "hole".');
+        if (!actions.includes(String(action))) throw new OpError(`A ${kind} spot fix's action must be one of ${actions.join(', ')}.`);
+        if (!(u >= 0 && u <= 1) || !(v >= 0 && v <= 1)) throw new OpError('A spot fix needs u and v between 0 and 1, as shares across and down the flat stencil.');
+        if (!(by >= 0 && by <= 10)) throw new OpError('A spot fix\'s by must be between 0 and 10 mm.');
+        settings = { ...settings, spotFixes: [...settings.spotFixes, { kind, u, v, action, by } as Settings['spotFixes'][number]] };
+        break;
+      }
+      case 'removeSpotFix': {
+        const i = Math.round(Number(o.index));
+        if (!(i >= 0 && i < settings.spotFixes.length)) throw new OpError(`No spot fix has the index ${o.index}. There are ${settings.spotFixes.length}, numbered from 0.`);
+        settings = { ...settings, spotFixes: settings.spotFixes.filter((_, k) => k !== i) };
         break;
       }
       default: throw new OpError(`Unknown change: ${(o as { op: string }).op}.`);

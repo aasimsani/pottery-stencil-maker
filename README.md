@@ -2,12 +2,12 @@
 
 Design underglaze stencils for your pottery and 3D print them. You measure the band that you want to paint on a mug, pot, vase, bowl, or plate rim. Then you layer designs from open libraries, or your own images, onto the band. The app gives you an STL file that fits the piece.
 
-**Try it in your browser at [aasimsani.net/projects/pottery-stencil-maker](https://aasimsani.net/projects/pottery-stencil-maker/).** You don't need to install anything.
+**Try it in your browser at [aasimsani.net/projects/pottery-stencil-maker](https://aasimsani.net/projects/pottery-stencil-maker/).** You do not need to install anything.
 
 ![The app with a sprig-and-dot design on a flared mug, the flat stencil, a 3D preview, and a passing print check](docs/screenshot.png)
 
 - **The stencil fits the piece.** A tapered pot gets an arc-shaped stencil, because a flat sheet lies flush on a cone only when the sheet has that shape. A plate rim gets a ring.
-- **Problems show up before you print.** The print check finds plastic that is too thin to print, paint lines that would close up, pieces that would fall out, and spans that would sag. It does not let you download a broken stencil by accident.
+- **Problems show up before you print.** The print check finds plastic that is too thin to print and paint lines that would close up. It also finds pieces that would fall out and spans that would sag. It does not let you download a broken stencil by accident.
 - **The stencil prints flat or curved.** A flat sheet bends around the piece. A curved shell prints upright in the shape of the piece, so you do not have to bend it.
 
 ## Run it
@@ -58,7 +58,7 @@ The local Worker uses the Turnstile test key from `.dev.vars.example`. As a resu
 1. **Describe the piece.** Pick a preset, or enter its base Ø, rim Ø, and height in mm. To get a Ø, measure the circumference with a tape and divide it by 3.14. For bellied or waisted shapes, add measurements in between. Measure the piece at the stage when you paint it, because clay shrinks. Click **Save to my pieces** to keep a piece for next time. To use the same design on a bigger or smaller piece, enter the new widest Ø under **Scale to widest Ø**. The band, the motifs, and the lines grow with the piece, and the margins and the thickness keep their values.
 2. **Place the paint band.** Set where the pattern starts and ends, in mm from the base along the surface. **Margins** add a plastic border around the band. **Reach the base** extends the bottom margin down to the table. The bottom edge of the stencil then rests on the table, so the stencil lines up with the base of the pot.
 3. **Add designs.** Click **+ Add design** to open the **Design library**, and click any design to add it as a layer. The library stays open, so you can add several designs in a row. Each layer has its own size and its own number of repeats around the piece and down the band. Open **Advanced** to set a layer's slice of the band, offset, rotation, scatter, threshold, and **Thicken lines**. A **Paint** layer adds paint, and a **Cut out** layer removes paint. **Clear margin** keeps lower layers away from a shape, so a motif can sit cleanly on a busy pattern. Click **+ Lines** to add solid, dashed, dotted, or wavy bands at any height.
-4. **Choose flat or curved.** Under **Stencil**, pick a **flat sheet** or a **curved shell**. A flat sheet prints flat and bends around the piece. A curved shell prints standing up in the exact shape of the piece. Half and third stencils clip on from the side, past a handle. A full wrap leaves a 3 mm slit so that it springs open. A stencil that covers part of the way round gets **repeat marks**, which are 4 small holes in its margins, one above and one below each end of the band. Mark the piece through the holes with a pencil, because pencil burns off in the kiln. Then move the stencil along until the 2 holes at its start sit on the 2 marks that its end left, and paint again.
+4. **Choose flat or curved.** Under **Stencil**, pick a **flat sheet** or a **curved shell**. A flat sheet prints flat and bends around the piece. A curved shell prints standing up in the exact shape of the piece. Half and third stencils clip on from the side, past a handle. A full wrap leaves a 3 mm slit so that it springs open. A stencil that covers part of the way round gets **repeat marks**. These are 4 small holes in its margins, one above and one below each end of the band. Mark the piece through the holes with a pencil, because pencil burns off in the kiln. Then move the stencil along until the 2 holes at its start sit on the 2 marks that its end left, and paint again.
 5. **Check the stencil.** Fix every error that the **Print check** marks. **Show problems** highlights each spot on the stencil. In the 3D view, **Print file** shows the exact STL file on the bed of your printer.
 6. **Download the STL file**, and then slice it. To print several stencils together, click **Add to plate** for each one. Then click **Download plate (.3mf)**, which saves one file with every stencil placed on the bed. The plate empties when you reload the page.
 
@@ -82,7 +82,7 @@ The defaults suit a Bambu Lab P2S with a 0.4 mm nozzle. To use a different bed s
 
 A flat sheet fits better when you curve it before you use it. Hot water heats the whole sheet evenly, so the thin bridges do not warp.
 
-1. Find a cylinder that is 5–10 mm smaller in diameter than the piece, such as a can, a glass jar, or a length of PVC pipe. The plastic springs back a little when it cools, so the smaller form gives a curve that matches the piece.
+1. Find a cylinder that is 5–10 mm smaller in diameter than the piece. A can, a glass jar, or a length of PVC pipe works. The plastic springs back a little when it cools, so the smaller form gives a curve that matches the piece.
 2. Put the stencil around the cylinder, with the side that touches the piece facing in. Hold it in place with rubber bands or tape on the margins.
 3. Put the cylinder and the stencil in hot water for about 30 seconds. PETG needs water just off the boil, at 80–90 °C. PLA needs 65–75 °C.
 4. Move the cylinder and the stencil into cold water to set the curve.
@@ -116,7 +116,7 @@ The **Credits** list under your layers names every source that you used. If you 
 ## Development
 
 ```sh
-npm test            # Vitest, about 100 tests of the geometry, mesh, checks and sources
+npm test            # Vitest, about 150 tests of the geometry, mesh, checks, sources and MCP
 npm run typecheck
 npm run build       # typecheck, then a static build in dist/
 ```

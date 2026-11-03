@@ -29,6 +29,17 @@ To host the app on Cloudflare Workers, run `npx wrangler login` once. Then run `
 
 The workflow `.github/workflows/deploy.yml` deploys every push to `main` after the tests and the build pass. It needs a Cloudflare API token from the **Edit Cloudflare Workers** template, saved as the repository secret `CLOUDFLARE_API_TOKEN`.
 
+## Use with Claude
+
+Claude can look at your stencil, change it and look again while you watch, through an MCP server on the app's Worker.
+
+1. Run `npm run dev:worker` and `npm run dev`, then open http://localhost:5173.
+2. Press **Connect Claude** in the header, and pass the person check.
+3. Run the `claude mcp add` command the panel shows. Claude can then use the `pottery-stencil` tools and the
+   `design_stencil` prompt while the tab stays open.
+
+The session lasts a week, and it only works while its tab is connected. Press **Disconnect** to end it.
+
 ## Make a stencil
 
 1. **Describe the piece.** Pick a preset, or enter its base Ø, rim Ø, and height in mm. To get a Ø, measure the circumference with a tape and divide it by 3.14. For bellied or waisted shapes, add measurements in between. Measure the piece at the stage when you paint it, because clay shrinks. Click **Save to my pieces** to keep a piece for next time. To use the same design on a bigger or smaller piece, enter the new widest Ø under **Scale to widest Ø**. The band, the motifs, and the lines grow with the piece, and the margins and the thickness keep their values.

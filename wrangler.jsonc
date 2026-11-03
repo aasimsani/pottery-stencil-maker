@@ -3,10 +3,19 @@
   "name": "pottery-stencil-maker",
   "account_id": "0166b7623c3b445802ae08ad398b3fcb",
   "compatibility_date": "2026-10-01",
-  // The app runs entirely in the browser, so the Worker serves the Vite build as static assets.
-  // The script in src/cloudflare.ts maps the /projects/ URL onto those files.
-  "main": "src/cloudflare.ts",
+  "compatibility_flags": ["nodejs_compat"],
+  // The app runs in the browser, so the Worker serves the Vite build as static assets, and src/cloudflare.ts maps the
+  // /projects/ URL onto those files. worker/index.ts adds the MCP route and the live sessions that relay Claude's calls.
+  "main": "worker/index.ts",
   "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": true },
+  "durable_objects": { "bindings": [{ "name": "SESSIONS", "class_name": "Session" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Session"] }],
+  // Five new sessions a minute per IP, and 60 tool calls a minute per session. The ids differ from the roller's,
+  // because rate limit namespaces are shared across the account.
+  "ratelimits": [
+    { "name": "SESSION_RATE", "namespace_id": "1003", "simple": { "limit": 5, "period": 60 } },
+    { "name": "CALL_RATE", "namespace_id": "1004", "simple": { "limit": 60, "period": 60 } }
+  ],
   "routes": [{ "pattern": "aasimsani.net/projects/pottery-stencil-maker*", "zone_name": "aasimsani.net" }],
   // The workers.dev address stays on so that aasimsani.net can fall back to it.
   "workers_dev": true

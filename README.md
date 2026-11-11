@@ -76,6 +76,7 @@ The defaults suit a Bambu Lab P2S with a 0.4 mm nozzle. To use a different bed s
 | Plate | Textured PEI. Flex the cooled plate to peel the stencil off. | Textured PEI |
 
 - Turn the brim off.
+- For a pot with a belly, set **Material** to **TPU** under **Stencil**. TPU stretches as well as bends, so a flat TPU sheet follows a curved wall that would lift a PETG one. Print it flat with a 0.4 mm nozzle, slowly, from dry filament. The print check then allows a more curved band, and it warns against a curved shell and a nozzle under 0.4 mm.
 - To reduce stringing, dry your filament, enable wipe while retracting, and run PETG at about 235 °C. A few seconds of hot air from a hair dryer clears any strings that remain.
 
 ### Curve a flat sheet with heat

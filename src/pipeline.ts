@@ -223,6 +223,7 @@ export function finishStencil(s: Settings, { gp, maskLayers, layerInfo, band, sh
     above: s.above, below: s.below, ends: s.ends, toBase: s.toBase, fits: rot !== null, curve: band.curve, strip, edgeGap,
     flaps: flaps.flaps.length, maxLift, shell, overhang: (Math.atan2(Math.abs(g.dr), g.height) * 180) / Math.PI,
     sags: sags?.spans.length ?? 0, worstSag: Math.max(0, ...(sags?.spans.map((x) => x.length) ?? [])),
+    tpu: s.material === 'tpu', potD: (band.topD + band.botD) / 2,
   });
   return { g, gp, mask, isl, rot, pieces, thinPlastic: thinPlastic.mask, thinHoles: thinHoles.mask, checks, flapMask: flaps.mask, flapBridges, shellSize: shell ? shellSize : undefined, sagMask, posts, marks, spotsApplied, edgeGap, band, layerInfo };
 }

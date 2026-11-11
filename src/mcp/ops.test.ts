@@ -61,3 +61,10 @@ describe('undoing one spot fix through the MCP', () => {
     expect(() => applyOps(two, [{ op: 'removeSpotFix', index: 5 }])).toThrow(/index/);
   });
 });
+
+describe('material', () => {
+  it('lets Claude switch the stencil to TPU, and rejects a material that doesn\'t exist', () => {
+    expect(applyOps(start(), [{ op: 'settings', patch: { material: 'tpu' } }]).settings.material).toBe('tpu');
+    expect(() => applyOps(start(), [{ op: 'settings', patch: { material: 'rubber' } }])).toThrow(/material/);
+  });
+});

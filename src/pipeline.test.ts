@@ -42,3 +42,11 @@ test('a thin strip of plastic left as drawn warns instead of blocking the downlo
   expect(r.checks.map((c) => `${c.level}:${c.id}`)).toContain('warn:thin-plastic-left');
   expect(r.checks.map((c) => c.id)).not.toContain('thin-plastic');
 });
+
+test('a gently bellied pot lifts a rigid stencil, and a TPU one stretches to follow it', () => {
+  // The wall curves at a 200 mm radius, so it strays about 2.3 mm from a flat stencil across a 60 mm band.
+  const belly = { name: 'Belly', profile: Array.from({ length: 13 }, (_, i) => ({ z: 10 * i, d: 2 * (60 - 200 + Math.sqrt(200 ** 2 - (10 * i - 60) ** 2)) })) };
+  const on = (material: string) => computeStencil(settingsFrom({ piece: belly, bandFrom: 31, bandTo: 91, above: 0, below: 0, coverage: 0.5, res: 0.5, material }), [newLinesLayer()], new Map()).checks.map((c) => c.id);
+  expect(on('rigid')).toContain('curve');
+  expect(on('tpu')).not.toContain('curve');
+});

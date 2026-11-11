@@ -1,4 +1,5 @@
 import type { Settings } from '../state';
+import { shrinkImage } from '../render/shrink';
 import type { Layer } from '../layers';
 import type { StencilResult } from '../pipeline';
 import type { PieceMode } from '../ui/Piece3D';
@@ -125,7 +126,7 @@ export function makeHandlers(api: TabApi): Record<string, Handler> {
   };
 
   // resolve() turns the bridge-only ops, which name a library design or an image, into layer ops.
-  const resolve = (o: Record<string, unknown>): Op => {
+  const resolve = async (o: Record<string, unknown>): Promise<Op> => {
     if (o.op === 'addDesign') {
       const ref = found.get(`${o.source}:${o.id}`) ?? (o.source === 'builtin' ? builtinRef(String(o.id)) : undefined);
       if (!ref) throw new OpError(`Search with search_library first, so the tab knows the design ${o.source}:${o.id}.`);
@@ -134,7 +135,8 @@ export function makeHandlers(api: TabApi): Record<string, Handler> {
     if (o.op === 'addImage') {
       const url = String(o.url ?? ''), name = String(o.name ?? 'Image');
       if (!/^(https:|data:image\/)/.test(url)) throw new OpError('An image URL must start with https: or data:image/.');
-      return { op: 'addLayer', kind: 'design', ref: { source: 'upload', id: `${name}-${Date.now()}`, title: name, thumb: url, data: url, credit: { source: 'Your image', license: 'your own' } } };
+      const { data, thumb } = await shrinkImage(url);
+      return { op: 'addLayer', kind: 'design', ref: { source: 'upload', id: `${name}-${Date.now()}`, title: name, thumb, data, credit: { source: 'Your image', license: 'your own' } } };
     }
     return o as Op;
   };
@@ -154,7 +156,7 @@ export function makeHandlers(api: TabApi): Record<string, Handler> {
     view: async (p: ViewArgs) => view(p),
     apply: async ({ ops, view: wantView }: { ops: Record<string, unknown>[]; view?: boolean }) => {
       const { s, layers } = api.get();
-      return commitAndWait(applyOps({ settings: s, layers }, ops.map(resolve)), wantView);
+      return commitAndWait(applyOps({ settings: s, layers }, await Promise.all(ops.map(resolve))), wantView);
     },
     searchLibrary: async ({ source, query = '' }: { source: string; query?: string }) => {
       const page = source === 'builtin' ? searchBuiltin(query)

@@ -124,6 +124,11 @@ export function Controls({ s, set, onPhoto, onScale }: { s: Settings; set: Set; 
             </p>}
           </>
         )}
+        <SelectField label="Material" value={s.material} onChange={(v) => set('material', v)}
+          options={[['rigid', 'PETG or PLA (stiff)'], ['tpu', 'TPU (flexible)']]} />
+        <p className="hint">{s.material === 'tpu'
+          ? 'TPU bends and stretches, so the stencil hugs a curved wall and doesn\'t crack. Print it as a flat sheet with a 0.4 mm nozzle, slowly, from dry filament. Start at 0.8–1 mm thick, so it holds its shape in your hands.'
+          : 'PETG or PLA prints the finest detail and bends round a gentle curve. On a pot with a belly, TPU follows the wall better.'}</p>
         <SelectField label="Print as" value={s.printAs} onChange={(v) => set('printAs', v)}
           options={[['flat', 'flat sheet'], ['shell', 'curved shell']]} />
         <p className="hint">{s.printAs === 'shell'

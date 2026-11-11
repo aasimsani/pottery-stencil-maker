@@ -35,3 +35,7 @@ test('settings mixed with the rib maker\'s drop its fields and the two that both
   expect(settingsFromLegacy({ piece: DEFAULTS.piece, thick: 4.5, above: 10, shrink: 12, trimLine: 25, coverage: 0.5 }))
     .toEqual({ piece: DEFAULTS.piece, coverage: 0.5 });
 });
+
+test('settings saved before the TPU option existed keep a rigid stencil', () => {
+  expect(settingsFrom({ thick: 0.8 }).material).toBe('rigid');
+});

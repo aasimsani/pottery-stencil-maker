@@ -16,6 +16,8 @@ export interface Settings {
   toBase: boolean;
   // Stencil
   coverage: number; shape: 'arc' | 'strip'; thick: number;
+  /** What the stencil prints in. A rigid one (PETG or PLA) only bends. A TPU one also stretches, so it follows a curved wall. */
+  material: 'rigid' | 'tpu';
   islandMode: IslandMode; bridge: number; res: number;
   /** Bridges wide pieces at both ends, so they bend with the sheet instead of lifting off the pot. */
   holdFlaps: boolean;
@@ -43,7 +45,7 @@ export interface SpotFix { kind: 'plastic' | 'hole'; u: number; v: number; actio
 export const DEFAULTS: Settings = {
   piece: { name: 'Flared mug', profile: [{ z: 0, d: 78 }, { z: 95, d: 86 }] },
   bandFrom: 20, bandTo: 70, above: 5, below: 5, ends: 5, toBase: false,
-  coverage: 0.5, shape: 'arc', thick: 0.6, islandMode: 'bridge', bridge: 1.2, res: 0.15, holdFlaps: true, printAs: 'flat', marks: true, clearance: 0.2, posts: true, maxBridge: 8,
+  coverage: 0.5, shape: 'arc', thick: 0.6, material: 'rigid', islandMode: 'bridge', bridge: 1.2, res: 0.15, holdFlaps: true, printAs: 'flat', marks: true, clearance: 0.2, posts: true, maxBridge: 8,
   bedW: 256, bedD: 256,
   nozzle: 0.4, minPlastic: 0.8, minHole: 0.8, strict: true,
   paintColor: '#2b4c8c',

@@ -211,6 +211,7 @@ export function Preview({ s, result, error, loading, updating, onStl, onAddToPla
         <summary>Printing &amp; painting tips</summary>
         <ul>
           <li><b>PETG</b> flexes and survives repeated wrapping better than PLA. PLA works at 0.4–0.6 mm but can crack along thin bridges.</li>
+          <li><b>TPU</b> bends and stretches, so it suits a pot with a belly. Pick it under <b>Material</b>. Print it flat with a 0.4 mm nozzle, slowly, from dry filament. Use the textured plate, or glue stick as a release layer on smooth PEI, because TPU bonds hard to a smooth plate.</li>
           <li><b>Bambu Studio on the P2S:</b> use the stock "0.20mm Standard" process with the 0.4 mm nozzle, so 0.6 mm prints as 3 solid layers. Set Brim type to "No-brim", and leave ironing off.</li>
           <li><b>Plate:</b> the P2S's included textured PEI plate is the right one. PETG releases cleanly from it, and the textured underside grips the pot slightly. Use glue stick as a release layer if you swap to smooth PEI.</li>
           <li>Let the plate cool, then flex it, and the thin stencil peels off in one piece.</li>

@@ -19,7 +19,7 @@ export class OpError extends Error {}
 
 // Fields whose strings must be one of a few values. The type check alone would let a typo through.
 const ENUMS: Record<string, string[]> = {
-  shape: ['arc', 'strip'], islandMode: ['bridge', 'drop', 'keep'], printAs: ['flat', 'shell'],
+  shape: ['arc', 'strip'], islandMode: ['bridge', 'drop', 'keep'], printAs: ['flat', 'shell'], material: ['rigid', 'tpu'],
   blend: ['paint', 'cut'], arrange: ['grid', 'scatter'], 'lines.style': ['solid', 'dashed', 'dotted', 'wavy'],
 };
 // Numbers the UI only offers from a short list. Coverage is a share of the way round, so a stencil can repeat evenly.

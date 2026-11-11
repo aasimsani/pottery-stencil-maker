@@ -6,6 +6,7 @@ const good: CheckInput = {
   thick: 0.8, nozzle: 0.4, minPlastic: 0.8, minHole: 0.8, bridge: 1.6,
   thinPlasticLeft: 0,
   above: 5, below: 5, ends: 5, toBase: false, fits: true, curve: 0, strip: false, edgeGap: 0, flaps: 0, maxLift: 0, shell: false, overhang: 0, sags: 0, worstSag: 0,
+  tpu: false, potD: 80,
 };
 const ids = (i: Partial<CheckInput>) => printChecks({ ...good, ...i }).map((c) => `${c.level}:${c.id}`);
 
@@ -67,4 +68,33 @@ test('errors come before warnings', () => {
 
 test('plastic the user left thin is a warning, because they chose it', () => {
   expect(ids({ thinPlasticLeft: 2 })).toEqual(['warn:thin-plastic-left']);
+});
+
+const message = (i: Partial<CheckInput>, id: string) => printChecks({ ...good, ...i }).find((c) => c.id === id)?.message ?? '';
+
+test('a thick TPU stencil still bends, so it skips the stiffness warning', () => {
+  expect(ids({ thick: 1.6 })).toEqual(['warn:stiff']);
+  expect(ids({ thick: 1.6, tpu: true })).toEqual([]);
+});
+test('TPU stretches to follow a curved wall, by about 5% of the pot\'s radius', () => {
+  // A rigid sheet lifts past 1.5 mm. On a Ø100 pot, TPU follows 2.5 mm.
+  expect(ids({ curve: 2.4, potD: 100 })).toEqual(['warn:curve']);
+  expect(ids({ curve: 2.4, potD: 100, tpu: true })).toEqual([]);
+  expect(ids({ curve: 3, potD: 100, tpu: true })).toEqual(['warn:curve']);
+  expect(message({ curve: 3, potD: 100, tpu: true }, 'curve')).toContain('2.5 mm');
+});
+test('on a small pot, TPU follows no less than a rigid sheet does', () => {
+  expect(ids({ curve: 1.4, potD: 40, tpu: true })).toEqual([]);
+  expect(ids({ curve: 1.6, potD: 40, tpu: true })).toEqual(['warn:curve']);
+});
+test('TPU warns against a curved shell and against a nozzle under 0.4 mm', () => {
+  expect(ids({ tpu: true, shell: true })).toEqual(['warn:tpu-shell']);
+  expect(ids({ tpu: true, nozzle: 0.2, minPlastic: 0.4, minHole: 0.4, bridge: 1.6 })).toEqual(['warn:tpu-nozzle']);
+  expect(ids({ shell: true, nozzle: 0.2 })).toEqual([]);
+});
+test('TPU doesn\'t snap, so its thin-plastic and bridge messages don\'t say it does', () => {
+  expect(message({ thinPlasticSpots: 1 }, 'thin-plastic')).toContain('snap');
+  expect(message({ thinPlasticSpots: 1, tpu: true }, 'thin-plastic')).not.toContain('snap');
+  expect(message({ thinPlasticLeft: 1, tpu: true }, 'thin-plastic-left')).not.toContain('snap');
+  expect(message({ bridge: 0.6, tpu: true }, 'bridge')).not.toContain('snap');
 });

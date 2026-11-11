@@ -51,7 +51,7 @@ export function buildServer(callTab: CallTab, mintUploadUrl: () => Promise<strin
     (a) => callTab('viewRegion', a));
   tool('describe_coverage', 'Describe the stencil in text, with no image. It splits the flat stencil into cols × rows cells, and gives each cell its share painted and its count of flagged spots. Keep the grid small, because a few cells say enough to find where to look.',
     z.object({ cols: z.number().int().min(1).max(12).default(4), rows: z.number().int().min(1).max(6).default(2), show }), (a) => callTab('describeCoverage', a));
-  tool('update_settings', 'Merge a patch into the settings, such as {"thick": 0.8} or {"coverage": 0.5} or {"piece": {"name": "Tall mug"}}. Unknown keys, wrong types and values outside a field\'s choices are rejected.',
+  tool('update_settings', 'Merge a patch into the settings, such as {"thick": 0.8} or {"coverage": 0.5} or {"piece": {"name": "Tall mug"}}, or {"material": "tpu"} for a flexible stencil that stretches to follow a curved wall. Unknown keys, wrong types and values outside a field\'s choices are rejected.',
     z.object({ patch, view }), (a) => apply([{ op: 'settings', patch: a.patch }], a.view));
   tool('add_lines', 'Add a lines layer on top.', z.object({ view }), (a) => apply([{ op: 'addLayer', kind: 'lines' }], a.view));
   tool('search_library', 'Search a design library. Pass a result\'s source and id to add_design.',
